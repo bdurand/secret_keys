@@ -1,0 +1,20 @@
+{
+  "foo": "bar",
+  "count": 1,
+  "array": [
+    "a",
+    "b",
+    "c"
+  ],
+  "complex": {
+    "one": "value_1",
+    "two": "value_2",
+    "more": [
+      {
+        "three": "value_3"
+      }
+    ]
+  },
+  "plaintext": "not encrypted",
+  "not_encrypted": "plain text value"
+}

@@ -1,0 +1,23 @@
+{
+  "not_encrypted": "plain text value",
+  ".encrypted": {
+    ".key": "75E7B1F9F6B6CE3AC7FED8C30E886974eec820e8",
+    "foo": "362BD9D1C83D57E08CD1D7C0603780AF31c745ef",
+    "count": 1,
+    "array": [
+      "063AB98071F61CF1FA36B52A2CFE10E4173cfc18",
+      "FCE45D2C57298511027B4922426DFA8F93a0748c",
+      "3E25056BD2B0F1D2BA8C9B72BC7635FA7df20b3b"
+    ],
+    "complex": {
+      "one": "1C49CADAAF17CC3B328FC4102F5FF0AB4a1b2ac7",
+      "two": "0FDD9118D17AA0EE51C724294BFBD8861b321966",
+      "more": [
+        {
+          "three": "0AF47B4E41758722F0B805E3C8C76751fc718589"
+        }
+      ]
+    },
+    "plaintext": "not encrypted"
+  }
+}
