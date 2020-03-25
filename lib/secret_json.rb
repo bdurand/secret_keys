@@ -6,6 +6,7 @@ require 'securerandom'
 require 'delegate'
 require 'set'
 require 'pathname'
+require 'base64'
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretJson < DelegateClass(Hash)
@@ -26,21 +27,20 @@ class SecretJson < DelegateClass(Hash)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').encrypt
       cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
       encrypted = cipher.update(str) + cipher.final
-      "#{encrypted.unpack('H*')[0].upcase}#{salt}"
+      "#{Base64.urlsafe_encode64(encrypted, padding: false)}|#{salt}"
     end
 
     # Decrypt a string with the encryption key. If the value is not a string or it was
     # not encrypted with the encryption key, the value itself will be returned.
     def decrypt(encrypted_str, encryption_key)
       return encrypted_str unless encrypted_str.is_a?(String) && encryption_key
-      return encrypted_str if encrypted_str.length < 9
+      return encrypted_str unless encrypted_str.include?("|")
 
-      salt = encrypted_str[-8, encrypted_str.length]
-      desalted_encrypted_str = encrypted_str[0, encrypted_str.length - 8]
+      desalted_encrypted_str, salt = encrypted_str.split("|", 2)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').decrypt
       cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
       begin
-        decrypted = [desalted_encrypted_str].pack('H*').unpack('C*').pack('c*')
+        decrypted = Base64.urlsafe_decode64(desalted_encrypted_str).unpack('C*').pack('c*')
         cipher.update(decrypted) + cipher.final
       rescue OpenSSL::Cipher::CipherError
         encrypted_str
