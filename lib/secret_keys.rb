@@ -2,6 +2,7 @@
 
 require 'openssl'
 require 'json'
+require 'yaml'
 require 'securerandom'
 require 'delegate'
 require 'set'
@@ -9,7 +10,7 @@ require 'pathname'
 require 'base64'
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
-class SecretJson < DelegateClass(Hash)
+class SecretKeys < DelegateClass(Hash)
 
   ENCRYPTED = ".encrypted"
   ENCRYPTION_KEY = ".key"
@@ -53,8 +54,8 @@ class SecretJson < DelegateClass(Hash)
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
   def initialize(path_or_stream, encryption_key = nil)
-    @encryption_key = (encryption_key || ENV['SECRET_JSON_KEY'])
-    path_or_stream = (path_or_stream.is_a?(String) ? Pathname.new(path_or_stream) : path_or_stream)
+    @encryption_key = (encryption_key || ENV['secret_keys_KEY'])
+    path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
     super(@values)
   end
@@ -83,28 +84,27 @@ class SecretJson < DelegateClass(Hash)
   # Save the JSON to a file at the specified path. Encrypted values in the file
   # will not be re-salted if the values have not changed.
   def save(path)
-    encrypted = encrypted_json
+    encrypted = encrypted_hash
 
     if File.exist?(path)
-      original_hash = JSON.load(File.read(path))
+      original_data = File.read(path)
+      original_hash = (JSON.parse(original_data) rescue YAML.load(original_data))
       original_encrypted = original_hash[ENCRYPTED] if original_hash
       if original_encrypted
         restore_unchanged_keys!(encrypted[ENCRYPTED], original_encrypted)
       end
     end
 
+    output = (yaml_file?(path) ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
     File.open(path, "w") do |file|
-      file.write(JSON.pretty_generate(encrypted))
-      file.write($/)
+      file.write(output)
     end
     nil
   end
 
-  # Output the JSON structure as a hash with all encrypted values being encrypted using.
-  # This is the same structure that can be loaded by the initalizer.
-  #
+  # Output the keys as a hash that matches the structure that can be loaded by the initalizer.
   # Note that all encrypted values will be re-salted when they are encrypted.
-  def encrypted_json
+  def encrypted_hash
     raise ArgumentError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
 
     hash = {}
@@ -129,7 +129,13 @@ class SecretJson < DelegateClass(Hash)
     @secret_keys = Set.new
     @values = {}
 
-    hash = JSON.load(path_or_stream.read) unless path_or_stream.nil?
+    hash = nil
+    if path_or_stream.is_a?(Hash)
+      hash = path_or_stream
+    elsif path_or_stream
+      data = path_or_stream.read
+      hash = (JSON.parse(data) rescue YAML.load(data))
+    end
     return if hash.nil? || hash.empty?
 
     encrypted_values = hash.delete(ENCRYPTED)
@@ -235,6 +241,11 @@ class SecretJson < DelegateClass(Hash)
 
   def encryption_key_matches?(encrypted_key)
     decrypt_value(encrypted_key) == @encryption_key
+  end
+  
+  def yaml_file?(path)
+    ext = path.split(".").last.to_s.downcase
+    ext == "yaml" || ext == "yml"
   end
 
 end

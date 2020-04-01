@@ -1,7 +1,7 @@
 PATH
   remote: .
   specs:
-    secret_json (1.0.0)
+    secret_keys (1.0.0)
 
 GEM
   remote: https://rubygems.org/
@@ -28,7 +28,7 @@ PLATFORMS
 DEPENDENCIES
   rake
   rspec (~> 3.0)
-  secret_json!
+  secret_keys!
 
 BUNDLED WITH
    2.0.2

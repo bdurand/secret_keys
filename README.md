@@ -1,6 +1,6 @@
-# SecretJson
+# SecretKeys
 
-This ruby gem handles encrypting values in a JSON file. It is yet another solution for storing secrets in a ruby project.
+This ruby gem handles encrypting values in a JSON or YAML file. It is yet another solution for storing secrets in a ruby project.
 
 The main advantage offered by this Gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values so you can store both your secrets and other configuration all in one place. It requires no special setup to access the encrypted data other than needing to provide the encryption key.
 
@@ -11,18 +11,18 @@ Encrypted values are salted and encrypted using a AES-128-ECB cipher with PBKDF2
 You can load the JSON from a file
 
 ```ruby
-secrets = SecretJson.new("/path/to/file.json", "mysecretkey")
+secrets = SecretKeys.new("/path/to/file.json", "mysecretkey")
 ```
 
 or a stream
 
 ```ruby
-secrets = SecretJson.new(File.open("/path/to/file.json"), "mysecretkey")
+secrets = SecretKeys.new(File.open("/path/to/file.json"), "mysecretkey")
 ```
 
-If you don't supply the encryption key in the constructor, it will be read from the `SECRET_JSON_KEY` environment variable.
+If you don't supply the encryption key in the constructor, it will be read from the `secret_keys_KEY` environment variable.
 
-The `SecretJson` object delegates to hash and can be treated as a hash for most purposes.
+The `SecretKeys` object delegates to hash and can be treated as a hash for most purposes.
 
 ```ruby
 password = secrets["password"]
@@ -42,15 +42,15 @@ Only string values can be encrypted. The encryption is recusive, so all strings 
 
 ## Command Line Tool
 
-You can use the `secret_json` command line tool to manage your JSON files.
+You can use the `secret_keys` command line tool to manage your JSON files.
 
 You can initialize a new file with the encrypt command.
 
 ```bash
-secret_json encrypt --key mysecret /path/to/file.json
+secret_keys encrypt --key mysecret /path/to/file.json
 ```
 
-If you don't specify the `--key` argument, the encryption key will either be read from the STDIN stream or from the `SECRET_JSON_KEY` environment variable.
+If you don't specify the `--key` argument, the encryption key will either be read from the STDIN stream or from the `secret_keys_KEY` environment variable.
 
 You can then use your favorite text editor to edit the values in the JSON file. When you are done, you can run the same command again to encrypt the file.
 
@@ -58,28 +58,28 @@ You can add or modify keys through the command line as well.
 
 ```bash
 # add an encrypted key
-secret_json encrypt --key mysecret --add password /path/to/file.json
+secret_keys encrypt --key mysecret --set password /path/to/file.json
 
 # add an encrypted key with a value
-secret_json encrypt --key mysecret --add password /path/to/file.json
+secret_keys encrypt --key mysecret --set password=value /path/to/file.json
 ```
 
 You can also decrypt or delete keys.
 
 ```bash
-secret_json encrypt --key mysecret --decrypt username --delete password /path/to/file.json
+secret_keys encrypt --key mysecret --decrypt username --delete password /path/to/file.json
 ```
 
 You can change the encryption key used in the file.
 
 ```bash
-secret_json encrypt --key mysecret --new-key newsecret /path/to/file.json
+secret_keys encrypt --key mysecret --new-key newsecret /path/to/file.json
 ```
 
 Finally, you can print the unencrypted file to STDOUT.
 
 ```bash
-secret_json decrypt --key mysecret /path/to/file.json
+secret_keys decrypt --key mysecret /path/to/file.json
 ```
 
 ## File Format

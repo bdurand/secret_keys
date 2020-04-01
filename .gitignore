@@ -1,0 +1,6 @@
+pkg
+tmp
+rdoc
+*.rbc
+.tm_properties
+.DS_Store

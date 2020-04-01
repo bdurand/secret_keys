@@ -1,11 +1,11 @@
 Gem::Specification.new do |spec|
-  spec.name = 'secret_json'
+  spec.name = 'secret_keys'
   spec.version = File.read(File.expand_path("../VERSION", __FILE__)).strip
   spec.authors = ['Brian Durand']
   spec.email = ['bbdurand@gmail.com']
 
   spec.summary = "Simple mechanism for loading JSON file with encrypted values."
-  spec.homepage = "https://github.com/bdurand/secret_json"
+  spec.homepage = "https://github.com/bdurand/secret_keys"
   spec.license = "MIT"
 
   # Specify which files should be added to the gem when it is released.
