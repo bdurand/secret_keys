@@ -20,7 +20,7 @@ or a stream
 secrets = SecretKeys.new(File.open("/path/to/file.json"), "mysecretkey")
 ```
 
-If you don't supply the encryption key in the constructor, it will be read from the `secret_keys_KEY` environment variable.
+If you don't supply the encryption key in the constructor, it will be read from the `SECRET_KEYS_KEY` environment variable.
 
 The `SecretKeys` object delegates to hash and can be treated as a hash for most purposes.
 
@@ -50,7 +50,7 @@ You can initialize a new file with the encrypt command.
 secret_keys encrypt --key mysecret /path/to/file.json
 ```
 
-If you don't specify the `--key` argument, the encryption key will either be read from the STDIN stream or from the `secret_keys_KEY` environment variable.
+If you don't specify the `--key` argument, the encryption key will either be read from the STDIN stream or from the `SECRET_KEYS_KEY` environment variable.
 
 You can then use your favorite text editor to edit the values in the JSON file. When you are done, you can run the same command again to encrypt the file.
 

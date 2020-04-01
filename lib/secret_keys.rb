@@ -54,7 +54,7 @@ class SecretKeys < DelegateClass(Hash)
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
   def initialize(path_or_stream, encryption_key = nil)
-    @encryption_key = (encryption_key || ENV['secret_keys_KEY'])
+    @encryption_key = (encryption_key || ENV['SECRET_KEYS_KEY'])
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
     super(@values)
