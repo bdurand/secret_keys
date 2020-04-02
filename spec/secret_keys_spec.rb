@@ -200,6 +200,10 @@ describe SecretKeys do
     it "should not encrypt when the encryption key is nil" do
       expect(SecretKeys.encrypt("foo", nil)).to eq "foo"
     end
+
+    it "should not encrypt an empty string" do
+      expect(SecretKeys.encrypt("", "key")).to eq ""
+    end
   end
 
 end

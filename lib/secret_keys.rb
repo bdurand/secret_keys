@@ -23,6 +23,7 @@ class SecretKeys < DelegateClass(Hash)
     # can be encrypted. Any other object type will be returned the value passed in.
     def encrypt(str, encryption_key, salt: nil)
       return str unless str.is_a?(String) && encryption_key
+      return "" if str == ""
 
       salt ||= SecureRandom.hex(4)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').encrypt
@@ -242,7 +243,7 @@ class SecretKeys < DelegateClass(Hash)
   def encryption_key_matches?(encrypted_key)
     decrypt_value(encrypted_key) == @encryption_key
   end
-  
+
   def yaml_file?(path)
     ext = path.split(".").last.to_s.downcase
     ext == "yaml" || ext == "yml"
