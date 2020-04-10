@@ -29,7 +29,7 @@ class SecretKeys < DelegateClass(Hash)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').encrypt
       cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
       encrypted = cipher.update(str) + cipher.final
-      "#{Base64.urlsafe_encode64(encrypted, padding: false)}|#{salt}"
+      "#{Base64.encode64(encrypted)}|#{salt}"
     end
 
     # Decrypt a string with the encryption key. If the value is not a string or it was
@@ -42,7 +42,7 @@ class SecretKeys < DelegateClass(Hash)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').decrypt
       cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
       begin
-        decrypted = Base64.urlsafe_decode64(desalted_encrypted_str).unpack('C*').pack('c*')
+        decrypted = Base64.decode64(desalted_encrypted_str).unpack('C*').pack('c*')
         cipher.update(decrypted) + cipher.final
       rescue OpenSSL::Cipher::CipherError
         encrypted_str

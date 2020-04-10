@@ -1,20 +1,20 @@
 {
   "not_encrypted": "plain text value",
   ".encrypted": {
-    ".key": "ca5lgXCF-HAkb1rSEjtabA|908a5295",
-    "foo": "6mk0OA5rFNQlqwWEd0Z7eg|5437067f",
+    ".key": "HJOZVMkbWggNQjOZRc8b+A==\n|e835e0af",
+    "foo": "yL3tigR7MUX3aQ3maxvKJw==\n|a629e5ad",
     "count": 1,
     "array": [
-      "r_pHAZxr23-7ZlNiNmACfg|db038787",
-      "oVOLoX2eT3Cld6JYE4-5mA|53dd1744",
-      "SwIgqsgd0yaAXLYpRM9epQ|6e75a929"
+      "wG8fTa2rOdPPbedo2VE5jw==\n|395f6c28",
+      "4BmyLH52gRcgAFFjPwxP4A==\n|95d4d304",
+      "BEU6SvVIqnRNKICK3F304w==\n|17b89f17"
     ],
     "complex": {
-      "one": "aNV7XGqm55Y2jjJ8XsOyYg|5f3c67c4",
-      "two": "iTo74UOAuBbNwB1Tvy18gQ|f88e341b",
+      "one": "KUqU1ONw7lxAfzcYf8B5Qg==\n|daf0a89f",
+      "two": "2FUtR7+AdYPdsAqGWiA4UA==\n|8ac02af0",
       "more": [
         {
-          "three": "MRJCb16uBOaVJ6AHZY9JEg|b5f772b2"
+          "three": "/ETDP5FubTl8SR65xMr4OQ==\n|813936d3"
         }
       ]
     },

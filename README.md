@@ -62,6 +62,9 @@ secret_keys encrypt --key mysecret --set password /path/to/file.json
 
 # add an encrypted key with a value
 secret_keys encrypt --key mysecret --set password=value /path/to/file.json
+
+# encrypt all keys in the file
+secret_keys encrypt --key mysecret --all /path/to/file.json
 ```
 
 You can also decrypt or delete keys.
