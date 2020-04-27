@@ -14,6 +14,8 @@ class SecretKeys < DelegateClass(Hash)
 
   ENCRYPTED = ".encrypted"
   ENCRYPTION_KEY = ".key"
+  
+  KDF_ITERATIONS = 20_000
 
   attr_writer :encryption_key
 
@@ -27,7 +29,7 @@ class SecretKeys < DelegateClass(Hash)
 
       salt ||= SecureRandom.hex(4)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').encrypt
-      cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
+      cipher.key = derive_key(encryption_key, salt: salt, length: cipher.key_len)
       encrypted = cipher.update(str) + cipher.final
       "#{Base64.encode64(encrypted)}|#{salt}"
     end
@@ -40,13 +42,20 @@ class SecretKeys < DelegateClass(Hash)
 
       desalted_encrypted_str, salt = encrypted_str.split("|", 2)
       cipher = OpenSSL::Cipher.new('AES-128-ECB').decrypt
-      cipher.key = OpenSSL::PKCS5.pbkdf2_hmac_sha1(encryption_key, salt, 20_000, cipher.key_len)
+      cipher.key = derive_key(encryption_key, salt: salt, length: cipher.key_len)
       begin
         decrypted = Base64.decode64(desalted_encrypted_str).unpack('C*').pack('c*')
         cipher.update(decrypted) + cipher.final
       rescue OpenSSL::Cipher::CipherError
         encrypted_str
       end
+    end
+    
+    private
+    
+    # Derive a key of given length from a password and salt value.
+    def derive_key(password, salt:, length:)
+      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: 'sha256')
     end
   end
 
@@ -183,7 +192,7 @@ class SecretKeys < DelegateClass(Hash)
     end
   end
 
-  # Since the encrypted values include a salt, make sure we don't overwrite values in the JSON
+  # Since the encrypted values include a salt, make sure we don't overwrite values in the stored
   # documents when the decrypted values haven't changed since this would mess up any file history
   # in a source code repository.
   def restore_unchanged_keys!(new_hash, old_hash)
