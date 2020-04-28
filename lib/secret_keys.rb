@@ -21,10 +21,6 @@ class SecretKeys < DelegateClass(Hash)
   CIPHER = "AES-256-GCM"
   KEY_LENGTH = 32
 
-  attr_writer :encryption_key
-  attr_writer :salt
-  attr_writer :salted_key
-
   class << self
     ENCRYPTED_PREFIX = "$AES$:"
 
@@ -46,7 +42,7 @@ class SecretKeys < DelegateClass(Hash)
       cipher.auth_data = ""
 
       # NOTE: We don't handle string encoding
-      encrypted_data = cipher.update(data) + cipher.final
+      encrypted_data = cipher.update(str) + cipher.final
       auth_tag = cipher.auth_tag
 
       params = CipherParams.new(nonce, auth_tag, encrypted_data)
@@ -105,13 +101,12 @@ class SecretKeys < DelegateClass(Hash)
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
   def initialize(path_or_stream, encryption_key = nil)
-    @encryption_key = encryption_key
-    @encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if @encryption_key.nil? || @encryption_key.empty?
-    @salt = nil
+    encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if encryption_key.nil? || encryption_key.empty?
+    update_secret(key: encryption_key)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
     # if no salt exists, create one.
-    gen_secret(SecureRandom.hex(8)) if @salt.nil?
+    update_secret(salt: SecureRandom.hex(8)) if @salt.nil?
     super(@values)
   end
 
@@ -180,6 +175,10 @@ class SecretKeys < DelegateClass(Hash)
     hash
   end
 
+  def encryption_key=(new_encryption_key)
+    update_secret(key: new_encryption_key)
+  end
+
   private
 
   # Load the JSON data in a file path or stream into a hash, decrypting all the encrypted values.
@@ -200,7 +199,7 @@ class SecretKeys < DelegateClass(Hash)
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
-      gen_secret(encrypted_values.delete(SALT))
+      update_secret(salt: encrypted_values.delete(SALT))
 
       # Check that we are using the right key
       if file_key && !encryption_key_matches?(file_key)
@@ -316,11 +315,18 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   # Update the secret key by updating the salt
-  def gen_secret(salt)
-    @salt = salt
-    # Convert the salt to raw byte string
-    salt_bytes = [@salt].pack('H*')
-    @secret_key = derive_key(@encryption_key, salt: salt_bytes, length: KEY_LENGTH)
+  def update_secret(key: nil, salt: nil)
+    @encryption_key = key unless key.nil? || key.empty?
+    @salt = salt unless salt.nil? || salt.empty?
+
+    # Only update the secret if encryption key and salt are present
+    if !@encryption_key.nil? && !@salt.nil?
+      # Convert the salt to raw byte string
+      salt_bytes = [@salt].pack('H*')
+      @secret_key = derive_key(@encryption_key, salt: salt_bytes, length: KEY_LENGTH)
+    end
+    # Don't accidentally return the secret, dammit
+    nil
   end
 
 end

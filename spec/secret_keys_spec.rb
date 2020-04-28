@@ -8,7 +8,7 @@ describe SecretKeys do
 
   describe "class" do
     it "should behave as a Hash" do
-      secrets = SecretKeys.new(nil, "key")
+      secrets = SecretKeys.new(nil, "SECRET_KEY")
       secrets["foo"] = "bar"
       expect(secrets["foo"]).to eq "bar"
       expect(secrets.size).to eq 1
@@ -19,7 +19,7 @@ describe SecretKeys do
   end
 
   describe "loading keys" do
-    let(:secrets) { SecretKeys.new(encrypted_file_path, "key") }
+    let(:secrets) { SecretKeys.new(encrypted_file_path, "SECRET_KEY") }
 
     it "should load a JSON file with encrypted strings" do
       expect(secrets.to_h).to eq decrypted_values
@@ -27,7 +27,7 @@ describe SecretKeys do
 
     it "should load a JSON stream with encrypted strings" do
       File.open(encrypted_file_path) do |json|
-        secrets = SecretKeys.new(json, "key")
+        secrets = SecretKeys.new(json, "SECRET_KEY")
         expect(secrets.to_h).to eq decrypted_values
       end
     end
@@ -36,7 +36,7 @@ describe SecretKeys do
       File.open(encrypted_file_path) do |json|
         data = JSON.parse(json.read)
         yaml = YAML.dump(data)
-        secrets = SecretKeys.new(StringIO.new(yaml), "key")
+        secrets = SecretKeys.new(StringIO.new(yaml), "SECRET_KEY")
         expect(secrets.to_h).to eq decrypted_values
       end
     end
@@ -44,7 +44,7 @@ describe SecretKeys do
     it "should load a hash with encrypted strings" do
       File.open(encrypted_file_path) do |json|
         data = JSON.parse(json.read)
-        secrets = SecretKeys.new(data, "key")
+        secrets = SecretKeys.new(data, "SECRET_KEY")
         expect(secrets.to_h).to eq decrypted_values
       end
     end
@@ -82,7 +82,7 @@ describe SecretKeys do
 
   describe "encrypted_hash" do
     it "should return the hash with encrypted values" do
-      secrets = SecretKeys.new(encrypted_file_path, "key")
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       json = secrets.encrypted_hash
 
       expect(json).to_not include("foo")
@@ -90,12 +90,12 @@ describe SecretKeys do
       expect(json[SecretKeys::ENCRYPTED]["foo"]).to_not eq secrets["foo"]
       expect(json["not_encrypted"]).to eq secrets["not_encrypted"]
 
-      decrypted = SecretKeys.new(StringIO.new(JSON.dump(json)), "key")
+      decrypted = SecretKeys.new(StringIO.new(JSON.dump(json)), "SECRET_KEY")
       expect(decrypted.to_h).to eq decrypted_values
     end
 
     it "should re-encrypt with the new encryption key" do
-      secrets = SecretKeys.new(encrypted_file_path, "key")
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       values = secrets.to_h
       secrets.encryption_key = "newkey"
       json = JSON.dump(secrets.encrypted_hash)
@@ -106,7 +106,7 @@ describe SecretKeys do
 
   describe "encrypt!" do
     it "should add a key to the encrypted values" do
-      secrets = SecretKeys.new(encrypted_file_path, "key")
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       secrets.encrypt!("not_encrypted")
       json = secrets.encrypted_hash
       expect(json).to_not include("not_encrypted")
@@ -117,7 +117,7 @@ describe SecretKeys do
 
   describe "decrypt!" do
     it "should remove a key from the encrypted values" do
-      secrets = SecretKeys.new(encrypted_file_path, "key")
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       secrets.decrypt!("foo")
       json = secrets.encrypted_hash
       expect(json).to include("foo")
@@ -134,7 +134,7 @@ describe SecretKeys do
         tempfile.write(original_file_contents)
         tempfile.flush
 
-        secrets = SecretKeys.new(encrypted_file_path, "key")
+        secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
         secrets["foo"] = "new value"
         secrets.save(tempfile.path)
         tempfile.rewind
@@ -161,7 +161,7 @@ describe SecretKeys do
         tempfile.write(original_file_contents)
         tempfile.flush
 
-        secrets = SecretKeys.new(encrypted_file_path, "key")
+        secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
         secrets["foo"] = "new value"
         secrets.save(tempfile.path)
         tempfile.rewind
@@ -182,19 +182,11 @@ describe SecretKeys do
     end
   end
 
-  describe "encryption" do
-    it "should encrypt a string with a salt" do
-      encrypted_1 = SecretKeys.encrypt("foo", "key")
-      encrypted_2 = SecretKeys.encrypt("foo", "key")
-      expect(encrypted_1).to_not eq encrypted_2
-      expect(SecretKeys.decrypt(encrypted_1, "key")).to eq "foo"
-      expect(SecretKeys.decrypt(encrypted_2, "key")).to eq "foo"
-    end
-
+  describe "encrypt" do
     it "should not encrypt a non-string" do
-      expect(SecretKeys.encrypt(1, "key")).to eq 1
-      expect(SecretKeys.encrypt(false, "key")).to eq false
-      expect(SecretKeys.encrypt(nil, "key")).to eq nil
+      expect(SecretKeys.encrypt(1, "SECRET_KEY")).to eq 1
+      expect(SecretKeys.encrypt(false, "SECRET_KEY")).to eq false
+      expect(SecretKeys.encrypt(nil, "SECRET_KEY")).to eq nil
     end
 
     it "should not encrypt when the encryption key is nil" do
@@ -202,7 +194,7 @@ describe SecretKeys do
     end
 
     it "should not encrypt an empty string" do
-      expect(SecretKeys.encrypt("", "key")).to eq ""
+      expect(SecretKeys.encrypt("", "SECRET_KEY")).to eq ""
     end
   end
 
