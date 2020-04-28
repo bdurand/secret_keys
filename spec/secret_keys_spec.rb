@@ -80,7 +80,7 @@ describe SecretKeys do
     end
   end
 
-  describe "encrypted_hash" do
+  describe "#encrypted_hash" do
     it "should return the hash with encrypted values" do
       secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       json = secrets.encrypted_hash
@@ -104,7 +104,7 @@ describe SecretKeys do
     end
   end
 
-  describe "encrypt!" do
+  describe "#encrypt!" do
     it "should add a key to the encrypted values" do
       secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       secrets.encrypt!("not_encrypted")
@@ -115,7 +115,7 @@ describe SecretKeys do
     end
   end
 
-  describe "decrypt!" do
+  describe "#decrypt!" do
     it "should remove a key from the encrypted values" do
       secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
       secrets.decrypt!("foo")
@@ -126,7 +126,7 @@ describe SecretKeys do
     end
   end
 
-  describe "save" do
+  describe "#save" do
     it "should save the encrypted hash as pretty JSON, only re-salting changed keys and encrypting unencrypted values" do
       tempfile = Tempfile.new(["secret_keys_test", ".json"])
       begin
@@ -182,7 +182,7 @@ describe SecretKeys do
     end
   end
 
-  describe "encrypt" do
+  describe ".encrypt" do
     it "should not encrypt a non-string" do
       expect(SecretKeys.encrypt(1, "SECRET_KEY")).to eq 1
       expect(SecretKeys.encrypt(false, "SECRET_KEY")).to eq false
@@ -198,4 +198,11 @@ describe SecretKeys do
     end
   end
 
+end
+
+describe OpenSSL do
+  it "should support aes-256-gcm" do
+    puts OpenSSL::Cipher.ciphers
+    expect(OpenSSL::Cipher.ciphers).to include('aes-256-gcm')
+  end
 end
