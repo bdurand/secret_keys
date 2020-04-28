@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'openssl'
 require 'json'
 require 'yaml'
 require 'securerandom'
@@ -18,6 +19,7 @@ class SecretKeys < DelegateClass(Hash)
   KDF_ITERATIONS = 20_000
   HASH_FUNC = 'sha256'
   CIPHER = "AES-256-GCM"
+  KEY_LENGTH = 32
 
   attr_writer :encryption_key
   attr_writer :salt
@@ -36,8 +38,8 @@ class SecretKeys < DelegateClass(Hash)
       begin
         # encode using aes and then prepend the encryption prefix so we know it's encrypted in the future
         encode_aes(str, secret_key).prepend(ENCRYPTED_PREFIX)
-      rescue OpenSSL::Cipher::CipherError
-        str
+      # rescue OpenSSL::Cipher::CipherError
+      #   str
       end
     end
 
@@ -65,12 +67,13 @@ class SecretKeys < DelegateClass(Hash)
       cipher = OpenSSL::Cipher.new(CIPHER).encrypt
 
       cipher.key = secret_key
-      cipher.auth_data = ""
       # Technically, this is a "bad" way to do things since we could theoretically
       # get a repeat nonce, compromising the algorithm. That said, it should be safe
       # from repeats as long as we don't use this key for more than 2^32 encryptions
       # so... rotate your keys/salt ever 4 billion encryption calls
       nonce = cipher.random_iv
+
+      cipher.auth_data = ""
 
       # NOTE: We don't handle string encoding
       encrypted_data = cipher.update(data) + cipher.final
@@ -102,12 +105,14 @@ class SecretKeys < DelegateClass(Hash)
   # in the JSON document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
-  def initialize(path_or_stream, encryption_key = nil, salt = nil)
+  def initialize(path_or_stream, encryption_key = nil)
     @encryption_key = encryption_key
     @encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if @encryption_key.nil? || @encryption_key.empty?
-    @salt = salt
+    @salt = nil
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
+    # if no salt exists, create one.
+    gen_secret(SecureRandom.hex(8)) if @salt.nil?
     super(@values)
   end
 
@@ -185,7 +190,8 @@ class SecretKeys < DelegateClass(Hash)
 
     hash = nil
     if path_or_stream.is_a?(Hash)
-      hash = path_or_stream
+      # HACK: make sure we create a copy of the hash. Otherwise, bad things can happen
+      hash = Marshal.load( Marshal.dump(path_or_stream) )
     elsif path_or_stream
       data = path_or_stream.read
       hash = (JSON.parse(data) rescue YAML.load(data))
@@ -195,6 +201,9 @@ class SecretKeys < DelegateClass(Hash)
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
+      gen_secret(encrypted_values.delete(SALT))
+
+      # Check that we are using the right key
       if file_key && !encryption_key_matches?(file_key)
         raise ArgumentError.new("Incorrect encryption key")
       end
@@ -268,12 +277,12 @@ class SecretKeys < DelegateClass(Hash)
 
   # Helper method to encrypt a value.
   def encrypt_value(value)
-    self.class.encrypt(value, @encryption_key)
+    self.class.encrypt(value, @secret_key)
   end
 
   # Helper method to decrypt a value.
   def decrypt_value(encrypted_value)
-    self.class.decrypt(encrypted_value, @encryption_key)
+    self.class.decrypt(encrypted_value, @secret_key)
   end
 
   # Helper method to test if two values are both encrypted, but result in the same decrypted value.
@@ -305,6 +314,14 @@ class SecretKeys < DelegateClass(Hash)
   def yaml_file?(path)
     ext = path.split(".").last.to_s.downcase
     ext == "yaml" || ext == "yml"
+  end
+
+  # Update the secret key by updating the salt
+  def gen_secret(salt)
+    @salt = salt
+    # Convert the salt to raw byte string
+    salt_bytes = [@salt].pack('H*')
+    @secret_key = derive_key(@encryption_key, salt: salt_bytes, length: KEY_LENGTH)
   end
 
 end
