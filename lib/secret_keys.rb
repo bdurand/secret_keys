@@ -35,12 +35,23 @@ class SecretKeys < DelegateClass(Hash)
       return str unless str.is_a?(String) && secret_key
       return "" if str == ""
 
-      begin
-        # encode using aes and then prepend the encryption prefix so we know it's encrypted in the future
-        encode_aes(str, secret_key).prepend(ENCRYPTED_PREFIX)
-      # rescue OpenSSL::Cipher::CipherError
-      #   str
-      end
+      cipher = OpenSSL::Cipher.new(CIPHER).encrypt
+
+      # Technically, this is a "bad" way to do things since we could theoretically
+      # get a repeat nonce, compromising the algorithm. That said, it should be safe
+      # from repeats as long as we don't use this key for more than 2^32 encryptions
+      # so... rotate your keys/salt ever 4 billion encryption calls
+      nonce = cipher.random_iv
+      cipher.key = secret_key
+      cipher.auth_data = ""
+
+      # NOTE: We don't handle string encoding
+      encrypted_data = cipher.update(data) + cipher.final
+      auth_tag = cipher.auth_tag
+
+      params = CipherParams.new(nonce, auth_tag, encrypted_data)
+
+      encode_aes(params).prepend(ENCRYPTED_PREFIX)
     end
 
     # Decrypt a string with the encryption key. If the value is not a string or it was
@@ -51,7 +62,18 @@ class SecretKeys < DelegateClass(Hash)
 
       begin
         decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
-        decode_aes(decrypt_str, secret_key)
+        params = decode_aes(decrypt_str)
+
+        cipher = OpenSSL::Cipher.new(CIPHER).decrypt
+
+
+        cipher.key = secret_key
+        cipher.iv = params.nonce
+        cipher.auth_tag = params.auth_tag
+        cipher.auth_data = ""
+
+        cipher.update(params.data) + cipher.final
+
       rescue OpenSSL::Cipher::CipherError
         encrypted_str
       end
@@ -61,43 +83,20 @@ class SecretKeys < DelegateClass(Hash)
 
     # format: <nonce:12>, <auth_tag:16>, <data:*>
     ENCODING_FORMAT = "a12 a16 a*"
+    CipherParams = Struct.new(:nonce, :auth_tag, :data)
 
     # Receive a cipher object (initialized with key) and data
-    def encode_aes(data, secret_key)
-      cipher = OpenSSL::Cipher.new(CIPHER).encrypt
-
-      cipher.key = secret_key
-      # Technically, this is a "bad" way to do things since we could theoretically
-      # get a repeat nonce, compromising the algorithm. That said, it should be safe
-      # from repeats as long as we don't use this key for more than 2^32 encryptions
-      # so... rotate your keys/salt ever 4 billion encryption calls
-      nonce = cipher.random_iv
-
-      cipher.auth_data = ""
-
-      # NOTE: We don't handle string encoding
-      encrypted_data = cipher.update(data) + cipher.final
-      auth_tag = cipher.auth_tag
-
-      encoded = [nonce, auth_tag, encrypted_data].pack(ENCODING_FORMAT)
-
+    def encode_aes(params)
+      encoded = params.values.pack(ENCODING_FORMAT)
       Base64.encode64(encoded)
     end
 
     # Passed in an aes encoded string and returns a cipher object
-    def decode_aes(str, secret_key)
-      cipher = OpenSSL::Cipher.new(CIPHER).decrypt
-
+    def decode_aes(str)
       unpacked_data = Base64.decode64(str).unpack(ENCODING_FORMAT)
       # Splat the data array apart
-      nonce, auth_tag, encrypted_data = unpacked_data
-
-      cipher.key = secret_key
-      cipher.iv = nonce
-      cipher.auth_tag = auth_tag
-      cipher.auth_data = ""
-
-      cipher.update(encrypted_data) + cipher.final
+      # nonce, auth_tag, encrypted_data = unpacked_data
+      CipherParams.new(*unpacked_data)
     end
   end
 
