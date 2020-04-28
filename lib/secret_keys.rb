@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-require 'openssl'
 require 'json'
 require 'yaml'
 require 'securerandom'
@@ -14,48 +13,84 @@ class SecretKeys < DelegateClass(Hash)
 
   ENCRYPTED = ".encrypted"
   ENCRYPTION_KEY = ".key"
-  
+  SALT = ".salt"
+
   KDF_ITERATIONS = 20_000
+  HASH_FUNC = 'sha256'
+  CIPHER = "AES-256-GCM"
 
   attr_writer :encryption_key
+  attr_writer :salt
+  attr_writer :salted_key
 
   class << self
+    ENCRYPTED_PREFIX = "$AES$:"
+
     # Encrypt a string with the encryption key. Encrypted values are also salted so
     # calling this function multiple times will result in different values. Only strings
     # can be encrypted. Any other object type will be returned the value passed in.
-    def encrypt(str, encryption_key, salt: nil)
-      return str unless str.is_a?(String) && encryption_key
+    def encrypt(str, secret_key)
+      return str unless str.is_a?(String) && secret_key
       return "" if str == ""
 
-      salt ||= SecureRandom.hex(4)
-      cipher = OpenSSL::Cipher.new('AES-128-ECB').encrypt
-      cipher.key = derive_key(encryption_key, salt: salt, length: cipher.key_len)
-      encrypted = cipher.update(str) + cipher.final
-      "#{Base64.encode64(encrypted)}|#{salt}"
+      begin
+        # encode using aes and then prepend the encryption prefix so we know it's encrypted in the future
+        encode_aes(str, secret_key).prepend(ENCRYPTED_PREFIX)
+      rescue OpenSSL::Cipher::CipherError
+        str
+      end
     end
 
     # Decrypt a string with the encryption key. If the value is not a string or it was
     # not encrypted with the encryption key, the value itself will be returned.
-    def decrypt(encrypted_str, encryption_key)
-      return encrypted_str unless encrypted_str.is_a?(String) && encryption_key
-      return encrypted_str unless encrypted_str.include?("|")
+    def decrypt(encrypted_str, secret_key)
+      return encrypted_str unless encrypted_str.is_a?(String) && secret_key
+      return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
 
-      desalted_encrypted_str, salt = encrypted_str.split("|", 2)
-      cipher = OpenSSL::Cipher.new('AES-128-ECB').decrypt
-      cipher.key = derive_key(encryption_key, salt: salt, length: cipher.key_len)
       begin
-        decrypted = Base64.decode64(desalted_encrypted_str).unpack('C*').pack('c*')
-        cipher.update(decrypted) + cipher.final
+        decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
+        decode_aes(decrypt_str, secret_key)
       rescue OpenSSL::Cipher::CipherError
         encrypted_str
       end
     end
-    
+
     private
-    
-    # Derive a key of given length from a password and salt value.
-    def derive_key(password, salt:, length:)
-      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: 'sha1')
+
+    # format: <nonce:12>, <auth_tag:16>, <data:*>
+    ENCODING_FORMAT = "a12 a16 a*"
+
+    # Receive a cipher object (initialized with key) and data
+    def encode_aes(data, secret_key)
+      cipher = OpenSSL::Cipher.new(CIPHER).encrypt
+
+      cipher.key = secret_key
+      cipher.auth_data = ""
+      nonce = cipher.random_iv
+
+      # NOTE: We don't handle string encoding
+      encrypted_data = cipher.update(data) + cipher.final
+      auth_tag = cipher.auth_tag
+
+      encoded = [nonce, auth_tag, encrypted_data].pack(ENCODING_FORMAT)
+
+      Base64.encode64(encoded)
+    end
+
+    # Passed in an aes encoded string and returns a cipher object
+    def decode_aes(str, secret_key)
+      cipher = OpenSSL::Cipher.new(CIPHER).decrypt
+
+      unpacked_data = Base64.decode64(str).unpack(ENCODING_FORMAT)
+      # Splat the data array apart
+      nonce, auth_tag, encrypted_data = unpacked_data
+
+      cipher.key = secret_key
+      cipher.iv = nonce
+      cipher.auth_tag = auth_tag
+      cipher.auth_data = ""
+
+      cipher.update(encrypted_data) + cipher.final
     end
   end
 
@@ -63,9 +98,10 @@ class SecretKeys < DelegateClass(Hash)
   # in the JSON document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
-  def initialize(path_or_stream, encryption_key = nil)
+  def initialize(path_or_stream, encryption_key = nil, salt = nil)
     @encryption_key = encryption_key
     @encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if @encryption_key.nil? || @encryption_key.empty?
+    @salt = salt
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
     super(@values)
@@ -127,7 +163,10 @@ class SecretKeys < DelegateClass(Hash)
         hash[key] = value
       end
     end
-    encrypted = {ENCRYPTION_KEY => encrypt_value(@encryption_key)}.merge(encrypt_values(encrypted))
+    encrypted = {
+      SALT => @salt,
+      ENCRYPTION_KEY => encrypt_value(@encryption_key)
+    }.merge(encrypt_values(encrypted))
 
     hash[ENCRYPTED] = encrypted
     hash
@@ -248,6 +287,11 @@ class SecretKeys < DelegateClass(Hash)
     else
       false
     end
+  end
+
+  # Derive a key of given length from a password and salt value.
+  def derive_key(password, salt:, length:)
+    OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
   end
 
   def encryption_key_matches?(encrypted_key)
