@@ -66,6 +66,10 @@ class SecretKeys < DelegateClass(Hash)
 
       cipher.key = secret_key
       cipher.auth_data = ""
+      # Technically, this is a "bad" way to do things since we could theoretically
+      # get a repeat nonce, compromising the algorithm. That said, it should be safe
+      # from repeats as long as we don't use this key for more than 2^32 encryptions
+      # so... rotate your keys/salt ever 4 billion encryption calls
       nonce = cipher.random_iv
 
       # NOTE: We don't handle string encoding
