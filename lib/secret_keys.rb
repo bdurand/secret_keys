@@ -18,7 +18,7 @@ class SecretKeys < DelegateClass(Hash)
 
   KDF_ITERATIONS = 20_000
   HASH_FUNC = 'sha256'
-  CIPHER = "AES-256-GCM"
+  CIPHER = "aes-256-gcm"
   KEY_LENGTH = 32
 
   class << self

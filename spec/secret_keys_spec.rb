@@ -202,7 +202,6 @@ end
 
 describe OpenSSL do
   it "should support aes-256-gcm" do
-    puts OpenSSL::Cipher.ciphers
-    expect(OpenSSL::Cipher.ciphers).to include('aes-256-gcm')
+    expect(OpenSSL::Cipher.ciphers).to include(SecretKeys::CIPHER)
   end
 end
