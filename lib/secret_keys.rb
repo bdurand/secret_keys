@@ -26,7 +26,7 @@ class SecretKeys < DelegateClass(Hash)
 
     # Encrypt a string with the encryption key. Encrypted values are also salted so
     # calling this function multiple times will result in different values. Only strings
-    # can be encrypted. Any other object type will be returned the value passed in.
+    # can be enc rypted. Any other object type will be returned the value passed in.
     def encrypt(str, secret_key)
       return str unless str.is_a?(String) && secret_key
       return "" if str == ""
@@ -41,8 +41,11 @@ class SecretKeys < DelegateClass(Hash)
       cipher.key = secret_key
       cipher.auth_data = ""
 
-      # NOTE: We don't handle string encoding
-      encrypted_data = cipher.update(str) + cipher.final
+      # Make sure the string is encoded as UTF-8. JSON/YAML only support string types
+      # anyways, so if you passed in binary data, it was gonna fail anyways. This ensures
+      # that we can easily decode the string later. If you have UTF-16 or something, deal with it.
+      utf8_str = str.encode('UTF-8')
+      encrypted_data = cipher.update(utf8_str) + cipher.final
       auth_tag = cipher.auth_tag
 
       params = CipherParams.new(nonce, auth_tag, encrypted_data)
@@ -62,14 +65,15 @@ class SecretKeys < DelegateClass(Hash)
 
         cipher = OpenSSL::Cipher.new(CIPHER).decrypt
 
-
         cipher.key = secret_key
         cipher.iv = params.nonce
         cipher.auth_tag = params.auth_tag
         cipher.auth_data = ""
 
-        cipher.update(params.data) + cipher.final
-
+        decoded_str = cipher.update(params.data) + cipher.final
+        
+        # force to utf-8 encoding. We already ensured this when we encoded in the first place
+        decoded_str.force_encoding('UTF-8')
       rescue OpenSSL::Cipher::CipherError
         encrypted_str
       end
@@ -277,7 +281,7 @@ class SecretKeys < DelegateClass(Hash)
   def encrypt_value(value)
     self.class.encrypt(value, @secret_key)
   end
-
+d
   # Helper method to decrypt a value.
   def decrypt_value(encrypted_value)
     self.class.decrypt(encrypted_value, @secret_key)
