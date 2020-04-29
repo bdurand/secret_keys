@@ -26,7 +26,7 @@ class SecretKeys < DelegateClass(Hash)
 
     # Encrypt a string with the encryption key. Encrypted values are also salted so
     # calling this function multiple times will result in different values. Only strings
-    # can be enc rypted. Any other object type will be returned the value passed in.
+    # can be encrypted. Any other object type will be returned the value passed in.
     def encrypt(str, secret_key)
       return str unless str.is_a?(String) && secret_key
       return "" if str == ""
@@ -281,7 +281,7 @@ class SecretKeys < DelegateClass(Hash)
   def encrypt_value(value)
     self.class.encrypt(value, @secret_key)
   end
-d
+
   # Helper method to decrypt a value.
   def decrypt_value(encrypted_value)
     self.class.decrypt(encrypted_value, @secret_key)
