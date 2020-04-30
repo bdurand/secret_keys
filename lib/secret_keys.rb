@@ -59,24 +59,20 @@ class SecretKeys < DelegateClass(Hash)
       return encrypted_str unless encrypted_str.is_a?(String) && secret_key
       return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
 
-      begin
-        decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
-        params = decode_aes(decrypt_str)
+      decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
+      params = decode_aes(decrypt_str)
 
-        cipher = OpenSSL::Cipher.new(CIPHER).decrypt
+      cipher = OpenSSL::Cipher.new(CIPHER).decrypt
 
-        cipher.key = secret_key
-        cipher.iv = params.nonce
-        cipher.auth_tag = params.auth_tag
-        cipher.auth_data = ""
+      cipher.key = secret_key
+      cipher.iv = params.nonce
+      cipher.auth_tag = params.auth_tag
+      cipher.auth_data = ""
 
-        decoded_str = cipher.update(params.data) + cipher.final
-        
-        # force to utf-8 encoding. We already ensured this when we encoded in the first place
-        decoded_str.force_encoding('UTF-8')
-      rescue OpenSSL::Cipher::CipherError
-        encrypted_str
-      end
+      decoded_str = cipher.update(params.data) + cipher.final
+
+      # force to utf-8 encoding. We already ensured this when we encoded in the first place
+      decoded_str.force_encoding('UTF-8')
     end
 
     private
