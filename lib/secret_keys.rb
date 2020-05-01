@@ -90,7 +90,8 @@ class SecretKeys < DelegateClass(Hash)
     # Receive a cipher object (initialized with key) and data
     def encode_aes(params)
       encoded = params.values.pack(ENCODING_FORMAT)
-      Base64.encode64(encoded)
+      # encode base64 and get rid of trailing newline and unnecessary =
+      Base64.encode64(encoded).chomp.tr('=', '')
     end
 
     # Passed in an aes encoded string and returns a cipher object
