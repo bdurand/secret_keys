@@ -122,32 +122,51 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   # Convert the value into an actual Hash object.
+  #
+  # @return [Hash]
   def to_h
     @values
   end
   alias_method :to_hash, :to_h
 
   # Mark the key as being encrypted when the JSON is saved.
+  #
+  # @param [String] key key to mark as needing encryption
+  # @return [void]
   def encrypt!(key)
     @secret_keys << key
+    nil
   end
 
   # Mark the key as no longer being decrypted when the JSON is saved.
+  #
+  # @param [String] key key to mark as not needing encryption
+  # @return [void]
   def decrypt!(key)
     @secret_keys.delete(key)
+    nil
   end
 
   # Return true if the key is encrypted.
+  #
+  # @param [String] key key to check
+  # @return [Boolean]
   def encrypted?(key)
     @secret_keys.include?(key)
   end
 
   # Save the JSON to a file at the specified path. Encrypted values in the file
-  # will not be re-salted if the values have not changed.
-  def save(path)
+  # will not be updated if the values have not changed (since each call uses a
+  # different initialization vector).
+  #
+  # @param [String] path Filepath to save to. Supports yaml and json format as the extension
+  # @param [Boolean] update: check to see if values have been changed before overwriting
+  # @return [void]
+  def save(path, update: true)
+    # create a copy of the encrypted hash for working on
     encrypted = encrypted_hash
 
-    if File.exist?(path)
+    if File.exist?(path) && update
       original_data = File.read(path)
       original_hash = (JSON.parse(original_data) rescue YAML.load(original_data))
       original_encrypted = original_hash[ENCRYPTED] if original_hash
@@ -165,6 +184,8 @@ class SecretKeys < DelegateClass(Hash)
 
   # Output the keys as a hash that matches the structure that can be loaded by the initalizer.
   # Note that all encrypted values will be re-salted when they are encrypted.
+  #
+  # @return [Hash] An encrypted hash that can be saved/parsed by a new instance of {SecretKeys}
   def encrypted_hash
     raise EncryptionKeyError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
 
@@ -186,6 +207,10 @@ class SecretKeys < DelegateClass(Hash)
     hash
   end
 
+  # Change the encryption key in the document. When saving later, this key will be used.
+  #
+  # @param [String] new_encryption_key encryption key to use for future {#save} calls
+  # @return [void]
   def encryption_key=(new_encryption_key)
     update_secret(key: new_encryption_key)
   end
@@ -338,6 +363,10 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   # Update the secret key by updating the salt
+  #
+  # @param key: new encryption key
+  # @param salt: salt to use for secret
+  # @return [void]
   def update_secret(key: nil, salt: nil)
     @encryption_key = key unless key.nil? || key.empty?
     @salt = salt unless salt.nil? || salt.empty?
