@@ -169,9 +169,10 @@ class SecretKeys < DelegateClass(Hash)
 
     if File.exist?(path) && update
       original_data = File.read(path)
-      original_hash = (JSON.parse(original_data) rescue YAML.load(original_data))
+      original_hash = parse_data(original_data)
       original_encrypted = original_hash[ENCRYPTED] if original_hash
-      if original_encrypted
+      # only check for unchanged keys if the original had encryption with the same key
+      if original_encrypted && encryption_key_matches?(original_encrypted[ENCRYPTION_KEY])
         restore_unchanged_keys!(encrypted[ENCRYPTED], original_encrypted)
       end
     end
@@ -201,7 +202,7 @@ class SecretKeys < DelegateClass(Hash)
     end
     encrypted = {
       SALT => @salt,
-      ENCRYPTION_KEY => encrypt_value(@encryption_key)
+      ENCRYPTION_KEY => key_dummy_value
     }.merge(encrypt_values(encrypted))
 
     hash[ENCRYPTED] = encrypted
@@ -222,11 +223,17 @@ class SecretKeys < DelegateClass(Hash)
   ENCRYPTION_KEY = ".key"
   SALT = ".salt"
 
+  # Used as a known dummy value for verifying we have the correct key
+  # DO NOT CHANGE!!!
+  KNOWN_DUMMY_VALUE = "SECRET_KEY"
+
   KDF_ITERATIONS = 20_000
   HASH_FUNC = 'sha256'
   KEY_LENGTH = 32
 
   # Load the JSON data in a file path or stream into a hash, decrypting all the encrypted values.
+  #
+  # @return [void]
   def load_secrets!(path_or_stream)
     @secret_keys = Set.new
     @values = {}
@@ -239,7 +246,7 @@ class SecretKeys < DelegateClass(Hash)
       hash = Marshal.load( Marshal.dump(path_or_stream) )
     elsif path_or_stream
       data = path_or_stream.read
-      hash = (JSON.parse(data) rescue YAML.load(data))
+      hash = parse_data(data)
     end
     return if hash.nil? || hash.empty?
 
@@ -257,6 +264,13 @@ class SecretKeys < DelegateClass(Hash)
     end
 
     @values = hash
+  end
+
+  # Attempt to parse the file first using JSON and fallback to YAML
+  # @param [String] data file data to parse
+  # @return [Hash] data parsed to a hash
+  def parse_data(data)
+    (JSON.parse(data) rescue YAML.load(data))
   end
 
   # Recursively encrypt all values.
@@ -352,9 +366,14 @@ class SecretKeys < DelegateClass(Hash)
     OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
   end
 
+  # This is a
+  def key_dummy_value
+    encrypt_value(KNOWN_DUMMY_VALUE)
+  end
+
   # Helper to check if our encryption key is correct
   def encryption_key_matches?(encrypted_key)
-    decrypt_value(encrypted_key) == @encryption_key
+    decrypt_value(encrypted_key) == KNOWN_DUMMY_VALUE
   rescue OpenSSL::Cipher::CipherError
     # If the key fails to decrypt, then it cannot be correct
     false

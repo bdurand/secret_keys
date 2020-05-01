@@ -4,7 +4,7 @@ This ruby gem handles encrypting values in a JSON or YAML file. It is yet anothe
 
 The main advantage offered by this gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values side-by-side, so easily track all your configurations in one place. After providing your secret key, all values can be easily accessed regardless of whether they were encrypted or plaintext.
 
-Encrypted values are stored using aes-256-gcm, and the key is derived from your password secret and salt using PDKDF2. All security primitives are provided by openssl, based on recommendations put forth in the libsodium crypto suite.
+Encrypted values are stored using aes-256-gcm, and the key is derived from your password secret and salt using PBKDF2. All security primitives are provided by openssl, based on recommendations put forth in the libsodium crypto suite.
 
 ## Usage
 
