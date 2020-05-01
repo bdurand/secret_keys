@@ -192,7 +192,9 @@ class SecretKeys < DelegateClass(Hash)
 
     hash = nil
     if path_or_stream.is_a?(Hash)
-      # HACK: make sure we create a copy of the hash. Otherwise, bad things can happen
+      # HACK: Perform a marshal dump/load operation to get a deep copy of the hash.
+      #       Otherwise, we can end up using destructive `#delete` operations and mess
+      #       up deeply nested values for external code (esp. when loading key: .encrypted)
       hash = Marshal.load( Marshal.dump(path_or_stream) )
     elsif path_or_stream
       data = path_or_stream.read
