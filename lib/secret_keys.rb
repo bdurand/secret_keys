@@ -12,21 +12,17 @@ require 'base64'
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretKeys < DelegateClass(Hash)
 
-  ENCRYPTED = ".encrypted"
-  ENCRYPTION_KEY = ".key"
-  SALT = ".salt"
-
-  KDF_ITERATIONS = 20_000
-  HASH_FUNC = 'sha256'
-  CIPHER = "aes-256-gcm"
-  KEY_LENGTH = 32
+  class EncryptionKeyError < ArgumentError; end
 
   class << self
-    ENCRYPTED_PREFIX = "$AES$:"
 
     # Encrypt a string with the encryption key. Encrypted values are also salted so
     # calling this function multiple times will result in different values. Only strings
     # can be encrypted. Any other object type will be returned the value passed in.
+    #
+    # @param [String] str string to encrypt (assumes UTF-8)
+    # @param [String] secret_key 32 byte ASCII-8BIT encryption key
+    # @return [String] Base64 encoded encrypted string with all aes parameters
     def encrypt(str, secret_key)
       return str unless str.is_a?(String) && secret_key
       return "" if str == ""
@@ -55,6 +51,10 @@ class SecretKeys < DelegateClass(Hash)
 
     # Decrypt a string with the encryption key. If the value is not a string or it was
     # not encrypted with the encryption key, the value itself will be returned.
+    #
+    # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from `.encrypt`)
+    # @param [String] secret_key 32 byte ASCII-8BIT encryption key
+    # @param [String] decrypted string value
     def decrypt(encrypted_str, secret_key)
       return encrypted_str unless encrypted_str.is_a?(String) && secret_key
       return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
@@ -79,6 +79,12 @@ class SecretKeys < DelegateClass(Hash)
 
     # format: <nonce:12>, <auth_tag:16>, <data:*>
     ENCODING_FORMAT = "a12 a16 a*"
+    ENCRYPTED_PREFIX = "$AES$:"
+    CIPHER = "aes-256-gcm"
+
+    # Basic struct to contain nonce, auth_tag, and data for passing around. Thought
+    # it was better than just passing an Array with positional params.
+    # @private
     CipherParams = Struct.new(:nonce, :auth_tag, :data)
 
     # Receive a cipher object (initialized with key) and data
@@ -100,6 +106,11 @@ class SecretKeys < DelegateClass(Hash)
   # in the JSON document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
+  #
+  # @param [String, #read, Hash] path_or_stream path to a json/yaml file to load, an IO object, or a Hash (mostly for testing purposes)
+  # @param [String] encryption_key secret to use for encryption/decryption
+  #
+  # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
   def initialize(path_or_stream, encryption_key = nil)
     encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if encryption_key.nil? || encryption_key.empty?
     update_secret(key: encryption_key)
@@ -155,7 +166,7 @@ class SecretKeys < DelegateClass(Hash)
   # Output the keys as a hash that matches the structure that can be loaded by the initalizer.
   # Note that all encrypted values will be re-salted when they are encrypted.
   def encrypted_hash
-    raise ArgumentError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
+    raise EncryptionKeyError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
 
     hash = {}
     encrypted = {}
@@ -181,6 +192,14 @@ class SecretKeys < DelegateClass(Hash)
 
   private
 
+  ENCRYPTED = ".encrypted"
+  ENCRYPTION_KEY = ".key"
+  SALT = ".salt"
+
+  KDF_ITERATIONS = 20_000
+  HASH_FUNC = 'sha256'
+  KEY_LENGTH = 32
+
   # Load the JSON data in a file path or stream into a hash, decrypting all the encrypted values.
   def load_secrets!(path_or_stream)
     @secret_keys = Set.new
@@ -203,7 +222,7 @@ class SecretKeys < DelegateClass(Hash)
 
       # Check that we are using the right key
       if file_key && !encryption_key_matches?(file_key)
-        raise ArgumentError.new("Incorrect encryption key")
+        raise EncryptionKeyError.new("Incorrect encryption key")
       end
       @secret_keys = encrypted_values.keys
       hash.merge!(decrypt_values(encrypted_values))
@@ -231,8 +250,8 @@ class SecretKeys < DelegateClass(Hash)
   def decrypt_values(values)
     if values.is_a?(Hash)
       decrypted_hash = {}
-      values.keys.each do |key|
-        decrypted_hash[key.to_s] = decrypt_values(values[key])
+      values.each do |key, value|
+        decrypted_hash[key.to_s] = decrypt_values(value)
       end
       decrypted_hash
     elsif values.is_a?(Enumerable)
@@ -305,8 +324,12 @@ class SecretKeys < DelegateClass(Hash)
     OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
   end
 
+  # Helper to check if our encryption key is correct
   def encryption_key_matches?(encrypted_key)
     decrypt_value(encrypted_key) == @encryption_key
+  rescue OpenSSL::Cipher::CipherError
+    # If the key fails to decrypt, then it cannot be correct
+    false
   end
 
   def yaml_file?(path)

@@ -50,7 +50,7 @@ describe SecretKeys do
     end
 
     it "should not load keys if the encryption key doesn't match" do
-      expect { SecretKeys.new(encrypted_file_path, "not_the_key") }.to raise_error(ArgumentError)
+      expect { SecretKeys.new(encrypted_file_path, "not_the_key") }.to raise_error(SecretKeys::EncryptionKeyError)
     end
 
     it "should load an unencrypted JSON file without an encryption key" do
@@ -198,10 +198,4 @@ describe SecretKeys do
     end
   end
 
-end
-
-describe OpenSSL do
-  it "should support aes-256-gcm" do
-    expect(OpenSSL::Cipher.ciphers).to include(SecretKeys::CIPHER)
-  end
 end
