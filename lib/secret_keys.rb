@@ -54,7 +54,7 @@ class SecretKeys < DelegateClass(Hash)
     #
     # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from `.encrypt`)
     # @param [String] secret_key 32 byte ASCII-8BIT encryption key
-    # @param [String] decrypted string value
+    # @return [String] decrypted string value
     def decrypt(encrypted_str, secret_key)
       return encrypted_str unless encrypted_str.is_a?(String) && secret_key
       return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
