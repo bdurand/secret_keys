@@ -1,8 +1,8 @@
 Gem::Specification.new do |spec|
   spec.name = 'secret_keys'
   spec.version = File.read(File.expand_path("../VERSION", __FILE__)).strip
-  spec.authors = ['Brian Durand']
-  spec.email = ['bbdurand@gmail.com']
+  spec.authors = ['Brian Durand', 'Winston Durand']
+  spec.email = ['bbdurand@gmail.com', 'me@winstondurand.com']
 
   spec.summary = "Simple mechanism for loading JSON file with encrypted values."
   spec.homepage = "https://github.com/bdurand/secret_keys"
@@ -30,4 +30,5 @@ Gem::Specification.new do |spec|
 
   spec.add_development_dependency("rspec", ["~> 3.0"])
   spec.add_development_dependency "rake"
+  spec.add_development_dependency "yard"
 end

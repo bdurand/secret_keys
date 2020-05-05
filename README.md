@@ -2,13 +2,13 @@
 
 This ruby gem handles encrypting values in a JSON or YAML file. It is yet another solution for storing secrets in a ruby project.
 
-The main advantage offered by this Gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values so you can store both your secrets and other configuration all in one place. It requires no special setup to access the encrypted data other than needing to provide the encryption key.
+The main advantage offered by this gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values side-by-side, so easily track all your configurations in one place. After providing your secret key, all values can be easily accessed regardless of whether they were encrypted or plaintext.
 
-Encrypted values are salted and encrypted using a AES-128-ECB cipher with PBKDF2 hashing.
+Encrypted values are stored using aes-256-gcm, and the key is derived from your password secret and salt using PBKDF2. All security primitives are provided by openssl, based on recommendations put forth in the libsodium crypto suite.
 
 ## Usage
 
-You can load the JSON from a file
+You can load the JSON/YAML from a file
 
 ```ruby
 secrets = SecretKeys.new("/path/to/file.json", "mysecretkey")
@@ -20,25 +20,44 @@ or a stream
 secrets = SecretKeys.new(File.open("/path/to/file.json"), "mysecretkey")
 ```
 
-If you don't supply the encryption key in the constructor, it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable.
+If you don't supply the encryption key in the constructor, by default it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable. As a side note, the empty string (`""`) is not considered a valid secret, so encryption **will** fail if ther is no explicitly passed secret and no ENV var.
 
-The `SecretKeys` object delegates to hash and can be treated as a hash for most purposes.
+The `SecretKeys` object delegates to `Hash` and can be treated as a hash for most purposes.
 
 ```ruby
 password = secrets["password"]
 ```
 
-You can add values to the hash as well and move keys between the encrypted and unencrypted keys. The values are always stored unencrypted in memory, but you can save them to a JSON file.
+You can add values to the hash as well and move keys between being encrypted/unencrypted at rest. The values are always stored unencrypted in memory, but you can save them to a JSON file.
 
 ```ruby
+# api_key is plaintext by default
 secrets["api_key"] = "1234567890"
+
+# mark api_key as a secret to encrypt
 secrets.encrypt!("api_key")
+
+# now, when we save, the value for api_key is encrypted
 secrets.save("/path/to/file.json")
 ```
 
-Note that since the hash must be serialized to JSON so only JSON compatible keys and values (string, number, boolean, null, array, hash) can be used.
+Note that since the hash must be serialized to JSON, only JSON compatible keys and values (string, number, boolean, null, array, hash) can be used. The same holds for YAML.
 
-Only string values can be encrypted. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted.
+Only string values can be encrypted. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
+
+```json
+{
+  ".encrypted": {
+    "enc_key1": {
+      "num": 1,
+      "rec": ["<encrypted-val>", true],
+      "thing": "<encrypted-val>"
+    },
+    "enc_key2": "<encrypted-val>"
+  },
+  "unenc_key": "plaintext"
+}
+```
 
 ## Command Line Tool
 
@@ -96,6 +115,7 @@ In this example, `key_1` is stored in plain text while `key_2` has been encrypte
   "key_1": "unencrypted value",
   ".encrypted": {
     ".key": "75E7B1F9F6B6CE3AC7FED8C30E886974eec820e8",
+    ".salt": "abe86cde9736ff78329cdef9",
     "key_2": "362BD9D1C83D57E08CD1D7C0603780AF31c745ef",
   }
 }
