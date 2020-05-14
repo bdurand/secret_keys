@@ -363,7 +363,11 @@ class SecretKeys < DelegateClass(Hash)
 
   # Derive a key of given length from a password and salt value.
   def derive_key(password, salt:, length:)
-    OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+    if defined?(OpenSSL::KDF)
+      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+    else
+      OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
+    end
   end
 
   # This is a
