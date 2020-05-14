@@ -59,7 +59,11 @@ class SecretKeys < DelegateClass(Hash)
       return encrypted_str unless encrypted_str.is_a?(String) && secret_key
       return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
 
-      decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
+      if DELETE_PREFIX_SUPPORTED
+        decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
+      else
+        decrypt_str = encrypted_str.sub(/\A#{Regexp.escape(ENCRYPTED_PREFIX)}/, "")
+      end
       params = decode_aes(decrypt_str)
 
       cipher = OpenSSL::Cipher.new(CIPHER).decrypt
@@ -81,6 +85,9 @@ class SecretKeys < DelegateClass(Hash)
     ENCODING_FORMAT = "a12 a16 a*"
     ENCRYPTED_PREFIX = "$AES$:"
     CIPHER = "aes-256-gcm"
+
+    DELETE_PREFIX_SUPPORTED = "".respond_to?(:delete_prefix)
+    private_constant :DELETE_PREFIX_SUPPORTED
 
     # Basic struct to contain nonce, auth_tag, and data for passing around. Thought
     # it was better than just passing an Array with positional params.
@@ -363,7 +370,11 @@ class SecretKeys < DelegateClass(Hash)
 
   # Derive a key of given length from a password and salt value.
   def derive_key(password, salt:, length:)
-    OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+    if defined?(OpenSSL::KDF)
+      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+    else
+      OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
+    end
   end
 
   # This is a
