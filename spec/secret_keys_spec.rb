@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "spec_helper"
 
 describe SecretKeys do
@@ -178,22 +180,6 @@ describe SecretKeys do
       ensure
         tempfile.close
       end
-    end
-  end
-
-  describe ".encrypt" do
-    it "should not encrypt a non-string" do
-      expect(SecretKeys.encrypt(1, "SECRET_KEY")).to eq 1
-      expect(SecretKeys.encrypt(false, "SECRET_KEY")).to eq false
-      expect(SecretKeys.encrypt(nil, "SECRET_KEY")).to eq nil
-    end
-
-    it "should not encrypt when the encryption key is nil" do
-      expect(SecretKeys.encrypt("foo", nil)).to eq "foo"
-    end
-
-    it "should not encrypt an empty string" do
-      expect(SecretKeys.encrypt("", "SECRET_KEY")).to eq ""
     end
   end
 
