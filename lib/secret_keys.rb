@@ -407,21 +407,18 @@ class SecretKeys < DelegateClass(Hash)
     # Don't accidentally return the secret, dammit
     nil
   end
-  
+
   # Logic to read an encryption key from environment variables if it is not explicitly supplied.
   # If it isn't specified, the value will be read from the SECRET_KEYS_ENCRYPTION_KEY environment
   # variable. Otherwise, it will be tried to read from the file specified by the
   # SECRET_KEYS_ENCRYPTION_KEY_FILE environment variable.
   def read_encryption_key(encryption_key)
     return encryption_key if encryption_key && !encryption_key.empty?
-    encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY']
+    encryption_key = ENV["SECRET_KEYS_ENCRYPTION_KEY"]
     return encryption_key if encryption_key && !encryption_key.empty?
-    encryption_key_file = ENV['SECRET_KEYS_ENCRYPTION_KEY_FILE']
+    encryption_key_file = ENV["SECRET_KEYS_ENCRYPTION_KEY_FILE"]
     if encryption_key_file && !encryption_key_file.empty? && File.exist?(encryption_key_file)
       File.read(encryption_key_file).chomp
-    else
-      nil
     end
   end
-
 end

@@ -219,5 +219,4 @@ describe SecretKeys do
       end
     end
   end
-
 end
