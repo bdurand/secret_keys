@@ -1,7 +1,6 @@
 require_relative "spec_helper"
 
 describe SecretKeys do
-
   let(:decrypted_file_path) { File.join(__dir__, "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "fixtures", "encrypted.json") }
   let(:decrypted_values) { JSON.parse(File.read(decrypted_file_path)) }
@@ -166,8 +165,8 @@ describe SecretKeys do
         secrets.save(tempfile.path)
         tempfile.rewind
 
-        original_yaml = YAML.load(original_file_contents)[SecretKeys::ENCRYPTED]
-        new_yaml = YAML.load(tempfile.read)[SecretKeys::ENCRYPTED]
+        original_yaml = YAML.safe_load(original_file_contents)[SecretKeys::ENCRYPTED]
+        new_yaml = YAML.safe_load(tempfile.read)[SecretKeys::ENCRYPTED]
 
         original_yaml.each do |key, value|
           if key == "foo" || key == "plaintext"
@@ -197,5 +196,4 @@ describe SecretKeys do
       expect(SecretKeys.encrypt("", "SECRET_KEY")).to eq ""
     end
   end
-
 end

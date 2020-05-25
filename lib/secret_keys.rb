@@ -1,21 +1,19 @@
 # frozen_string_literal: true
 
-require 'openssl'
-require 'json'
-require 'yaml'
-require 'securerandom'
-require 'delegate'
-require 'set'
-require 'pathname'
-require 'base64'
+require "openssl"
+require "json"
+require "yaml"
+require "securerandom"
+require "delegate"
+require "set"
+require "pathname"
+require "base64"
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretKeys < DelegateClass(Hash)
-
   class EncryptionKeyError < ArgumentError; end
 
   class << self
-
     # Encrypt a string with the encryption key. Encrypted values are also salted so
     # calling this function multiple times will result in different values. Only strings
     # can be encrypted. Any other object type will be returned the value passed in.
@@ -40,7 +38,7 @@ class SecretKeys < DelegateClass(Hash)
       # Make sure the string is encoded as UTF-8. JSON/YAML only support string types
       # anyways, so if you passed in binary data, it was gonna fail anyways. This ensures
       # that we can easily decode the string later. If you have UTF-16 or something, deal with it.
-      utf8_str = str.encode('UTF-8')
+      utf8_str = str.encode("UTF-8")
       encrypted_data = cipher.update(utf8_str) + cipher.final
       auth_tag = cipher.auth_tag
 
@@ -72,7 +70,7 @@ class SecretKeys < DelegateClass(Hash)
       decoded_str = cipher.update(params.data) + cipher.final
 
       # force to utf-8 encoding. We already ensured this when we encoded in the first place
-      decoded_str.force_encoding('UTF-8')
+      decoded_str.force_encoding("UTF-8")
     end
 
     private
@@ -91,7 +89,7 @@ class SecretKeys < DelegateClass(Hash)
     def encode_aes(params)
       encoded = params.values.pack(ENCODING_FORMAT)
       # encode base64 and get rid of trailing newline and unnecessary =
-      Base64.encode64(encoded).chomp.tr('=', '')
+      Base64.encode64(encoded).chomp.tr("=", "")
     end
 
     # Passed in an aes encoded string and returns a cipher object
@@ -113,7 +111,7 @@ class SecretKeys < DelegateClass(Hash)
   #
   # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
   def initialize(path_or_stream, encryption_key = nil)
-    encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY'] if encryption_key.nil? || encryption_key.empty?
+    encryption_key = ENV["SECRET_KEYS_ENCRYPTION_KEY"] if encryption_key.nil? || encryption_key.empty?
     update_secret(key: encryption_key)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
@@ -128,7 +126,7 @@ class SecretKeys < DelegateClass(Hash)
   def to_h
     @values
   end
-  alias_method :to_hash, :to_h
+  alias to_hash to_h
 
   # Mark the key as being encrypted when the JSON is saved.
   #
@@ -228,7 +226,7 @@ class SecretKeys < DelegateClass(Hash)
   KNOWN_DUMMY_VALUE = "SECRET_KEY"
 
   KDF_ITERATIONS = 20_000
-  HASH_FUNC = 'sha256'
+  HASH_FUNC = "sha256"
   KEY_LENGTH = 32
 
   # Load the JSON data in a file path or stream into a hash, decrypting all the encrypted values.
@@ -243,7 +241,7 @@ class SecretKeys < DelegateClass(Hash)
       # HACK: Perform a marshal dump/load operation to get a deep copy of the hash.
       #       Otherwise, we can end up using destructive `#delete` operations and mess
       #       up deeply nested values for external code (esp. when loading key: .encrypted)
-      hash = Marshal.load( Marshal.dump(path_or_stream) )
+      hash = Marshal.load(Marshal.dump(path_or_stream))
     elsif path_or_stream
       data = path_or_stream.read
       hash = parse_data(data)
@@ -270,7 +268,9 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String] data file data to parse
   # @return [Hash] data parsed to a hash
   def parse_data(data)
-    (JSON.parse(data) rescue YAML.load(data))
+    JSON.parse(data)
+  rescue JSON::JSONError
+    YAML.safe_load(data)
   end
 
   # Recursively encrypt all values.
@@ -396,11 +396,10 @@ class SecretKeys < DelegateClass(Hash)
     # Only update the secret if encryption key and salt are present
     if !@encryption_key.nil? && !@salt.nil?
       # Convert the salt to raw byte string
-      salt_bytes = [@salt].pack('H*')
+      salt_bytes = [@salt].pack("H*")
       @secret_key = derive_key(@encryption_key, salt: salt_bytes, length: KEY_LENGTH)
     end
     # Don't accidentally return the secret, dammit
     nil
   end
-
 end
