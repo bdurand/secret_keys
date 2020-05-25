@@ -110,8 +110,9 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String] encryption_key secret to use for encryption/decryption
   #
   # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
+  # or (if that is empty) the value read from the file path in SECRET_KEYS_ENCRYPTION_KEY_FILE.
   def initialize(path_or_stream, encryption_key = nil)
-    encryption_key = ENV["SECRET_KEYS_ENCRYPTION_KEY"] if encryption_key.nil? || encryption_key.empty?
+    encryption_key = read_encryption_key(encryption_key)
     update_secret(key: encryption_key)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
@@ -406,4 +407,21 @@ class SecretKeys < DelegateClass(Hash)
     # Don't accidentally return the secret, dammit
     nil
   end
+  
+  # Logic to read an encryption key from environment variables if it is not explicitly supplied.
+  # If it isn't specified, the value will be read from the SECRET_KEYS_ENCRYPTION_KEY environment
+  # variable. Otherwise, it will be tried to read from the file specified by the
+  # SECRET_KEYS_ENCRYPTION_KEY_FILE environment variable.
+  def read_encryption_key(encryption_key)
+    return encryption_key if encryption_key && !encryption_key.empty?
+    encryption_key = ENV['SECRET_KEYS_ENCRYPTION_KEY']
+    return encryption_key if encryption_key && !encryption_key.empty?
+    encryption_key_file = ENV['SECRET_KEYS_ENCRYPTION_KEY_FILE']
+    if encryption_key_file && !encryption_key_file.empty? && File.exist?(encryption_key_file)
+      File.read(encryption_key_file).chomp
+    else
+      nil
+    end
+  end
+
 end

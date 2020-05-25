@@ -20,7 +20,7 @@ or a stream
 secrets = SecretKeys.new(File.open("/path/to/file.json"), "mysecretkey")
 ```
 
-If you don't supply the encryption key in the constructor, by default it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable. As a side note, the empty string (`""`) is not considered a valid secret, so encryption **will** fail if ther is no explicitly passed secret and no ENV var.
+If you don't supply the encryption key in the constructor, by default it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable. If that value is not present, then it will attempted to be read from the file path in the `SECRET_KEYS_ENCRYPTION_KEY_FILE` environment variable. As a side note, the empty string (`""`) is not considered a valid secret, so encryption **will** fail if ther is no explicitly passed secret and no ENV variable.
 
 The `SecretKeys` object delegates to `Hash` and can be treated as a hash for most purposes.
 

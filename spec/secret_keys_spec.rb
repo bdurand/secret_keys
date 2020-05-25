@@ -196,4 +196,28 @@ describe SecretKeys do
       expect(SecretKeys.encrypt("", "SECRET_KEY")).to eq ""
     end
   end
+
+  describe "specifying encryption key" do
+    it "should default to the value explicitly passed in" do
+      ClimateControl.modify(SECRET_KEYS_ENCRYPTION_KEY: "nothing", SECRET_KEYS_ENCRYPTION_KEY_FILE: "/foo") do
+        secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
+        expect(secrets.to_h).to eq decrypted_values
+      end
+    end
+
+    it "should read the encryption key from the SECRET_KEYS_ENCRYPTION_KEY environment variable" do
+      ClimateControl.modify(SECRET_KEYS_ENCRYPTION_KEY: "SECRET_KEY", SECRET_KEYS_ENCRYPTION_KEY_FILE: "/foo") do
+        secrets = SecretKeys.new(encrypted_file_path)
+        expect(secrets.to_h).to eq decrypted_values
+      end
+    end
+
+    it "should read the encryption key from the SECRET_KEYS_ENCRYPTION_KEY environment variable" do
+      ClimateControl.modify(SECRET_KEYS_ENCRYPTION_KEY: "", SECRET_KEYS_ENCRYPTION_KEY_FILE: File.expand_path("fixtures/secret_key", __dir__)) do
+        secrets = SecretKeys.new(encrypted_file_path)
+        expect(secrets.to_h).to eq decrypted_values
+      end
+    end
+  end
+
 end
