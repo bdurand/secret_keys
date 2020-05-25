@@ -45,7 +45,7 @@ class SecretKeys
     class Edit < CLI
       def parse_additional_options(opts)
         @actions = []
-        opts.on("-e", "--set-encrypted KEY=VALUE", String, "Set an encrypted value in the file. You can use dot notation to set a nested value.") do |value|
+        opts.on("-e", "--set-encrypted KEY[=VALUE]", String, "Set an encrypted value in the file. You can use dot notation to set a nested value.") do |value|
           key, val = value.split("=", 2)
           @actions << [:encrypt, key, val]
         end
@@ -53,7 +53,7 @@ class SecretKeys
           key, val = value.split("=", 2)
           @actions << [:decrypt, key, val]
         end
-        opts.on("-r", "--set-encrypted KEY=VALUE", String, "Remove a key from the file. You can use dot notation to remove a nested value.") do |value|
+        opts.on("-r", "--remove KEY", String, "Remove a key from the file. You can use dot notation to remove a nested value.") do |value|
           @actions << [:remove, value]
         end
       end
@@ -85,7 +85,7 @@ class SecretKeys
       @format = nil
 
       OptionParser.new do |opts|
-        opts.banner = "Usage: secret_keys encrypt|decrypt|read|edit [options] input_file|- output_file|-"
+        opts.banner = "Usage: secret_keys <encrypt|decrypt|read|edit> [options] [--] INFILE [OUTFILE|-]"
 
         opts.on("--help", "Prints this help") do
           puts opts.help
@@ -100,7 +100,7 @@ class SecretKeys
           @secret_key = File.read(value).chomp
         end
 
-        opts.on("-f", "--format JSON|YAML", String, "Set the output format. By default this will be the same as the input format.") do |value|
+        opts.on("-f", "--format [FORMAT]", [:json, :yaml, :auto], "Set the output format. By default this will be the same as the input format.") do |value|
           @format = get_format(value)
         end
 
@@ -118,7 +118,7 @@ class SecretKeys
     def get_secret_key(value)
       if value == "-"
         if STDIN.tty?
-          STDIN.getpass("secret key:")
+          STDIN.getpass("Secret key: ")
         else
           STDIN.gets
         end
