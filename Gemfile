@@ -9,3 +9,5 @@ gem "standard", "0.4.6"
 gem "rspec", "~> 3.9"
 
 gem "yard"
+
+gem "climate_control"
