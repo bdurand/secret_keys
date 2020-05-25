@@ -1,6 +1,12 @@
 # Test runner copied from R167/backblaze
 name: Run tests
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
 jobs:
   rspec:
     name: rspec ruby-${{ matrix.ruby }} (${{ matrix.os }})
@@ -10,10 +16,6 @@ jobs:
       matrix:
         os: [ ubuntu-latest ]
         ruby: [ 2.4, 2.5, 2.6, 2.7 ]
-        include: # define single matrix case that performs upload
-          - os: ubuntu-latest
-            ruby: 2.7
-            upload: "true"
     steps:
       - name: checkout
         uses: actions/checkout@v2

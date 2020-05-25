@@ -1,5 +1,9 @@
 # SecretKeys
 
+[![specs](https://github.com/bdurand/secret_keys/workflows/Run%20tests/badge.svg)](https://github.com/bdurand/secret_keys/actions?query=branch%3Amaster)
+[![code style](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
+[![gem version](https://badge.fury.io/rb/secret_keys.svg)](https://badge.fury.io/rb/secret_keys)
+
 This ruby gem handles encrypting values in a JSON or YAML file. It is yet another solution for storing secrets in a ruby project.
 
 The main advantage offered by this gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values side-by-side, so easily track all your configurations in one place. After providing your secret key, all values can be easily accessed regardless of whether they were encrypted or plaintext.
