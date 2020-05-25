@@ -15,7 +15,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
-        ruby: [ 2.4, 2.5, 2.6, 2.7, truffleruby, rubinius, jruby ]
+        ruby: [ 2.4, 2.5, 2.6, 2.7, jruby, rubinius ]
         job: [ rspec ]
         include:
           - os: ubuntu-latest
@@ -31,6 +31,7 @@ jobs:
       # Caching makes life better
       - name: build lockfile
         run: |
+          gem install -v '~> 2.0' bundler
           bundle config path vendor/bundle
           bundle lock
       - uses: actions/cache@v1
@@ -51,4 +52,4 @@ jobs:
         run:  bundle exec rake spec
       - name: standardrb
         if:   matrix.job == 'standardrb'
-        run:  bundle exec rake spec
+        run:  bundle exec rake standard
