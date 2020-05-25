@@ -112,6 +112,9 @@ class SecretKeys < DelegateClass(Hash)
   # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
   # or (if that is empty) the value read from the file path in SECRET_KEYS_ENCRYPTION_KEY_FILE.
   def initialize(path_or_stream, encryption_key = nil)
+    @encryption_key = nil
+    @salt = nil
+
     encryption_key = read_encryption_key(encryption_key)
     update_secret(key: encryption_key)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
