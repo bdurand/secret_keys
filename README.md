@@ -112,11 +112,15 @@ In this example, `key_1` is stored in plain text while `key_2` has been encrypte
 
 ```json
 {
-  "key_1": "unencrypted value",
   ".encrypted": {
-    ".key": "75E7B1F9F6B6CE3AC7FED8C30E886974eec820e8",
-    ".salt": "abe86cde9736ff78329cdef9",
-    "key_2": "362BD9D1C83D57E08CD1D7C0603780AF31c745ef",
-  }
+    ".salt": "aecdfdb296983ec0",
+    ".key": "$AES$:LNkaWu/g7gM7zu4qC/4FAGOANOLWcY86uqxQfFiHRVSvXSA23pY",
+    "foo": "$AES$:XcbGIW9ABbfcMv79+YK0MC8P7WWtEAfE2Y8S/MMN5Q",
+    "array": [
+      "$AES$:1WPr25fkbVbQWvTCiEHJOPT50970Z+D8qkYTnTk",
+      "$AES$:FgSCK3pG8RBtYFqzO/WmNwus2SABI5zGGmfkPEw"
+    ],
+  },
+  "not_encrypted": "plain text value"
 }
 ```
