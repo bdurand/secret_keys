@@ -38,7 +38,7 @@ class SecretKeys < DelegateClass(Hash)
       # Make sure the string is encoded as UTF-8. JSON/YAML only support string types
       # anyways, so if you passed in binary data, it was gonna fail anyways. This ensures
       # that we can easily decode the string later. If you have UTF-16 or something, deal with it.
-      utf8_str = str.encode("UTF-8")
+      utf8_str = str.encode(Encoding::UTF_8)
       encrypted_data = cipher.update(utf8_str) + cipher.final
       auth_tag = cipher.auth_tag
 
@@ -57,7 +57,7 @@ class SecretKeys < DelegateClass(Hash)
       return encrypted_str unless encrypted_str.is_a?(String) && secret_key
       return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
 
-      decrypt_str = encrypted_str.delete_prefix(ENCRYPTED_PREFIX)
+      decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
       params = decode_aes(decrypt_str)
 
       cipher = OpenSSL::Cipher.new(CIPHER).decrypt
@@ -70,7 +70,7 @@ class SecretKeys < DelegateClass(Hash)
       decoded_str = cipher.update(params.data) + cipher.final
 
       # force to utf-8 encoding. We already ensured this when we encoded in the first place
-      decoded_str.force_encoding("UTF-8")
+      decoded_str.force_encoding(Encoding::UTF_8)
     end
 
     private
