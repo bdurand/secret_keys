@@ -1,19 +1,26 @@
 # Test runner copied from R167/backblaze
 name: Run tests
-on: [push, pull_request]
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
 jobs:
-  rspec:
-    name: rspec ruby-${{ matrix.ruby }} (${{ matrix.os }})
+  specs:
+    name: ${{ matrix.job }} ruby-${{ matrix.ruby }} (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         os: [ ubuntu-latest ]
         ruby: [ 2.4, 2.5, 2.6, 2.7 ]
-        include: # define single matrix case that performs upload
+        job: [ rspec ]
+        include:
           - os: ubuntu-latest
             ruby: 2.7
-            upload: "true"
+            job: standardrb
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -24,6 +31,7 @@ jobs:
       # Caching makes life better
       - name: build lockfile
         run: |
+          gem install -v '~> 2.0' bundler # needed for rubinius for some reason...
           bundle config path vendor/bundle
           bundle lock
       - uses: actions/cache@v1
@@ -38,5 +46,10 @@ jobs:
           bundle install --jobs 3 --retry 3
           bundle clean
       # Okay, back to what we really care about...
-      - name: spec
+      # This is sort of a hack, but it's fine.
+      - name: specs
+        if:   matrix.job == 'rspec'
         run:  bundle exec rake spec
+      - name: standardrb
+        if:   matrix.job == 'standardrb'
+        run:  bundle exec rake standard
