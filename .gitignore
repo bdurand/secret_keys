@@ -1,8 +1,11 @@
-pkg
-tmp
-.yardoc
-/doc
-rdoc
-*.rbc
 .tm_properties
+/.bundle/
+/.yardoc
+/Gemfile.lock
+/_yardoc/
+/coverage/
+/doc/
+/pkg/
+/spec/reports/
+/tmp/
 .DS_Store
