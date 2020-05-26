@@ -93,7 +93,8 @@ class SecretKeys < DelegateClass(Hash)
     format ||= @format
     format = format.to_s.downcase
 
-    output = (format == "yaml" ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
+    output = (format == "yaml" ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+    output << $/ unless output.end_with?($/) # ensure file ends with system dependent new line
     File.open(path, "w") do |file|
       file.write(output)
     end
@@ -200,9 +201,10 @@ class SecretKeys < DelegateClass(Hash)
   def encrypt_values(values, original)
     if values.is_a?(Hash)
       encrypted_hash = {}
-      values.keys.each do |key|
+      values.each_key do |key|
+        key = key.to_s
         original_value = original[key] if original.is_a?(Hash)
-        encrypted_hash[key.to_s] = encrypt_values(values[key], original_value)
+        encrypted_hash[key] = encrypt_values(values[key], original_value)
       end
       encrypted_hash
     elsif values.is_a?(Enumerable)
