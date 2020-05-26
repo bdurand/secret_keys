@@ -15,6 +15,7 @@ class SecretKeys::Encryptor
   def initialize(password, salt)
     # Convert the salt to raw byte string
     salt_bytes = [salt].compact.pack("H*")
+    @derived_key = nil
     if password && !password.empty?
       @derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
     end

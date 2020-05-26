@@ -11,8 +11,6 @@ require "base64"
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretKeys < DelegateClass(Hash)
-  require_relative "secret_keys/encryptor"
-
   class EncryptionKeyError < ArgumentError; end
 
   # Parse a JSON stream or file with encrypted values. Any values in the ".encrypted" key
@@ -329,3 +327,5 @@ class SecretKeys < DelegateClass(Hash)
     encryption_key
   end
 end
+
+require_relative "secret_keys/encryptor"
