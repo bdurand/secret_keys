@@ -7,7 +7,7 @@ require_relative "../secret_keys.rb"
 
 module SecretKeys::CLI
   class Base
-    attr_reader :secrets
+    attr_reader :secrets, :secret_key, :input, :output
 
     def initialize(argv)
       parse_options(argv)
@@ -30,7 +30,7 @@ module SecretKeys::CLI
 
     # This method should be called when referencing the output stream. It will yield to the
     # block with a stream.
-    def output
+    def output_stream
       if @output.respond_to?(:write)
         yield(@output)
         @output.flush
@@ -44,11 +44,18 @@ module SecretKeys::CLI
 
     # Return the output format.
     def format
-      if [:json, :yaml].include?(@format)
-        @format
-      else
-        secrets.input_format
+      return @format if [:json, :yaml].include?(@format)
+
+      if output.is_a?(String)
+        extension = output.split(".").last.downcase
+        if extension == "json"
+          return :json
+        elsif ["yaml", "yml"].include?(extension)
+          return :yaml
+        end
       end
+
+      secrets.input_format
     end
 
     private
@@ -82,7 +89,7 @@ module SecretKeys::CLI
 
       raise ArgumentError.new("Too many arguments") if argv.size > 2
       @input = argv.shift
-      @input = STDIN if @input == "-"
+      @input = STDIN if @input.nil? || @input == "-"
 
       @output = argv.first
       @output = STDOUT if @output.nil? || output == "-"
@@ -131,7 +138,7 @@ module SecretKeys::CLI
       string = (format == :yaml ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
 
-      output do |stream|
+      output_stream do |stream|
         stream.write(string)
       end
     end
@@ -147,13 +154,15 @@ module SecretKeys::CLI
       string = (format == :yaml ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
 
-      output do |stream|
+      output_stream do |stream|
         stream.write(string)
       end
     end
   end
 
   class Read < Base
+    attr_reader :key
+
     def action_name
       "read"
     end
@@ -171,13 +180,15 @@ module SecretKeys::CLI
       @key.split(".").each do |key|
         val = secrets[key] if val.is_a?(Hash)
       end
-      output do |stream|
+      output_stream do |stream|
         stream.write(val)
       end
     end
   end
 
   class Edit < Base
+    attr_reader :actions
+
     def action_name
       "edit"
     end

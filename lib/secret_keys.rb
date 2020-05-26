@@ -137,7 +137,7 @@ class SecretKeys < DelegateClass(Hash)
     @original_encrypted = {}
     update_secret(key: new_encryption_key)
   end
-  
+
   # Return the data format (:json or :yaml) for the original data. Defaults to :json.
   #
   # @return [String]
@@ -198,6 +198,7 @@ class SecretKeys < DelegateClass(Hash)
   # @return [Hash] data parsed to a hash
   def parse_data(data)
     @format = :json
+    return {} if data.nil? || data.empty?
     JSON.parse(data)
   rescue JSON::JSONError
     @format = :yaml
