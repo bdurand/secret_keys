@@ -13,94 +13,6 @@ require "base64"
 class SecretKeys < DelegateClass(Hash)
   class EncryptionKeyError < ArgumentError; end
 
-  class << self
-    # Encrypt a string with the encryption key. Encrypted values are also salted so
-    # calling this function multiple times will result in different values. Only strings
-    # can be encrypted. Any other object type will be returned the value passed in.
-    #
-    # @param [String] str string to encrypt (assumes UTF-8)
-    # @param [String] secret_key 32 byte ASCII-8BIT encryption key
-    # @return [String] Base64 encoded encrypted string with all aes parameters
-    def encrypt(str, secret_key)
-      return str unless str.is_a?(String) && secret_key
-      return "" if str == ""
-
-      cipher = OpenSSL::Cipher.new(CIPHER).encrypt
-
-      # Technically, this is a "bad" way to do things since we could theoretically
-      # get a repeat nonce, compromising the algorithm. That said, it should be safe
-      # from repeats as long as we don't use this key for more than 2^32 encryptions
-      # so... rotate your keys/salt ever 4 billion encryption calls
-      nonce = cipher.random_iv
-      cipher.key = secret_key
-      cipher.auth_data = ""
-
-      # Make sure the string is encoded as UTF-8. JSON/YAML only support string types
-      # anyways, so if you passed in binary data, it was gonna fail anyways. This ensures
-      # that we can easily decode the string later. If you have UTF-16 or something, deal with it.
-      utf8_str = str.encode(Encoding::UTF_8)
-      encrypted_data = cipher.update(utf8_str) + cipher.final
-      auth_tag = cipher.auth_tag
-
-      params = CipherParams.new(nonce, auth_tag, encrypted_data)
-
-      encode_aes(params).prepend(ENCRYPTED_PREFIX)
-    end
-
-    # Decrypt a string with the encryption key. If the value is not a string or it was
-    # not encrypted with the encryption key, the value itself will be returned.
-    #
-    # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from `.encrypt`)
-    # @param [String] secret_key 32 byte ASCII-8BIT encryption key
-    # @return [String] decrypted string value
-    def decrypt(encrypted_str, secret_key)
-      return encrypted_str unless encrypted_str.is_a?(String) && secret_key
-      return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
-
-      decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
-      params = decode_aes(decrypt_str)
-
-      cipher = OpenSSL::Cipher.new(CIPHER).decrypt
-
-      cipher.key = secret_key
-      cipher.iv = params.nonce
-      cipher.auth_tag = params.auth_tag
-      cipher.auth_data = ""
-
-      decoded_str = cipher.update(params.data) + cipher.final
-
-      # force to utf-8 encoding. We already ensured this when we encoded in the first place
-      decoded_str.force_encoding(Encoding::UTF_8)
-    end
-
-    private
-
-    # format: <nonce:12>, <auth_tag:16>, <data:*>
-    ENCODING_FORMAT = "a12 a16 a*"
-    ENCRYPTED_PREFIX = "$AES$:"
-    CIPHER = "aes-256-gcm"
-
-    # Basic struct to contain nonce, auth_tag, and data for passing around. Thought
-    # it was better than just passing an Array with positional params.
-    # @private
-    CipherParams = Struct.new(:nonce, :auth_tag, :data)
-
-    # Receive a cipher object (initialized with key) and data
-    def encode_aes(params)
-      encoded = params.values.pack(ENCODING_FORMAT)
-      # encode base64 and get rid of trailing newline and unnecessary =
-      Base64.encode64(encoded).chomp.tr("=", "")
-    end
-
-    # Passed in an aes encoded string and returns a cipher object
-    def decode_aes(str)
-      unpacked_data = Base64.decode64(str).unpack(ENCODING_FORMAT)
-      # Splat the data array apart
-      # nonce, auth_tag, encrypted_data = unpacked_data
-      CipherParams.new(*unpacked_data)
-    end
-  end
-
   # Parse a JSON or YAML stream or file with encrypted values. Any values in the ".encrypted" key
   # in the document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
@@ -210,7 +122,7 @@ class SecretKeys < DelegateClass(Hash)
     end
     encrypted.merge!(encrypt_values(encrypted, @original_encrypted))
     encrypted[SALT] = @salt
-    encrypted[ENCRYPTION_KEY] = (@original_encrypted[ENCRYPTION_KEY] || key_dummy_value)
+    encrypted[ENCRYPTION_KEY] = (@original_encrypted[ENCRYPTION_KEY] || encrypted_known_value)
 
     hash[ENCRYPTED] = encrypted
     hash
@@ -231,13 +143,9 @@ class SecretKeys < DelegateClass(Hash)
   ENCRYPTION_KEY = ".key"
   SALT = ".salt"
 
-  # Used as a known dummy value for verifying we have the correct key
+  # Used as a known value for verifying we have the correct key
   # DO NOT CHANGE!!!
-  KNOWN_DUMMY_VALUE = "SECRET_KEY"
-
-  KDF_ITERATIONS = 20_000
-  HASH_FUNC = "sha256"
-  KEY_LENGTH = 32
+  KNOWN_VALUE = "SECRET_KEY"
 
   # Load the JSON data in a file path or stream into a hash, decrypting all the encrypted values.
   #
@@ -330,12 +238,12 @@ class SecretKeys < DelegateClass(Hash)
 
   # Helper method to encrypt a value.
   def encrypt_value(value)
-    self.class.encrypt(value, @secret_key)
+    @encryptor.encrypt(value)
   end
 
   # Helper method to decrypt a value.
   def decrypt_value(encrypted_value)
-    self.class.decrypt(encrypted_value, @secret_key)
+    @encryptor.decrypt(encrypted_value)
   end
 
   # Helper method to test if two values are both encrypted, but result in the same decrypted value.
@@ -355,23 +263,14 @@ class SecretKeys < DelegateClass(Hash)
     end
   end
 
-  # Derive a key of given length from a password and salt value.
-  def derive_key(password, salt:, length:)
-    if defined?(OpenSSL::KDF)
-      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
-    else
-      OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
-    end
-  end
-
-  # This is a known value that we can encrypt to determine if the secret has changed.
-  def key_dummy_value
-    encrypt_value(KNOWN_DUMMY_VALUE)
+  # This is an encrypted known value that can be used determine if the secret has changed.
+  def encrypted_known_value
+    encrypt_value(KNOWN_VALUE)
   end
 
   # Helper to check if our encryption key is correct
   def encryption_key_matches?(encrypted_key)
-    decrypt_value(encrypted_key) == KNOWN_DUMMY_VALUE
+    decrypt_value(encrypted_key) == KNOWN_VALUE
   rescue OpenSSL::Cipher::CipherError
     # If the key fails to decrypt, then it cannot be correct
     false
@@ -398,9 +297,7 @@ class SecretKeys < DelegateClass(Hash)
 
     # Only update the secret if encryption key and salt are present
     if !@encryption_key.nil? && !@salt.nil?
-      # Convert the salt to raw byte string
-      salt_bytes = [@salt].pack("H*")
-      @secret_key = derive_key(@encryption_key, salt: salt_bytes, length: KEY_LENGTH)
+      @encryptor = Encryptor.new(@encryption_key, @salt)
     end
     # Don't accidentally return the secret, dammit
     nil
@@ -425,3 +322,5 @@ class SecretKeys < DelegateClass(Hash)
     encryption_key
   end
 end
+
+require_relative "secret_keys/encryptor"
