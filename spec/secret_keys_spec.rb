@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require_relative "spec_helper"
 
 describe SecretKeys do
@@ -101,6 +103,21 @@ describe SecretKeys do
       new_secrets = SecretKeys.new(StringIO.new(json), "newkey")
       expect(new_secrets.to_h).to eq values
     end
+
+    it "should not re-salt encrypted values that haven't changed" do
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
+      secrets["foo"] = "new_value"
+      original_file_contents = File.read(encrypted_file_path)
+      original_encrypted = JSON.parse(original_file_contents)[SecretKeys::ENCRYPTED]
+
+      secrets.encrypted_hash[SecretKeys::ENCRYPTED].each do |key, value|
+        if key == "foo" || key == "plaintext"
+          expect(value).to_not eq original_encrypted[key]
+        else
+          expect(value).to eq original_encrypted[key]
+        end
+      end
+    end
   end
 
   describe "#encrypt!" do
@@ -178,22 +195,6 @@ describe SecretKeys do
       ensure
         tempfile.close
       end
-    end
-  end
-
-  describe ".encrypt" do
-    it "should not encrypt a non-string" do
-      expect(SecretKeys.encrypt(1, "SECRET_KEY")).to eq 1
-      expect(SecretKeys.encrypt(false, "SECRET_KEY")).to eq false
-      expect(SecretKeys.encrypt(nil, "SECRET_KEY")).to eq nil
-    end
-
-    it "should not encrypt when the encryption key is nil" do
-      expect(SecretKeys.encrypt("foo", nil)).to eq "foo"
-    end
-
-    it "should not encrypt an empty string" do
-      expect(SecretKeys.encrypt("", "SECRET_KEY")).to eq ""
     end
   end
 
