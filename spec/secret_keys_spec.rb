@@ -103,6 +103,21 @@ describe SecretKeys do
       new_secrets = SecretKeys.new(StringIO.new(json), "newkey")
       expect(new_secrets.to_h).to eq values
     end
+
+    it "should not re-salt encrypted values that haven't changed" do
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
+      secrets["foo"] = "new_value"
+      original_file_contents = File.read(encrypted_file_path)
+      original_encrypted = JSON.parse(original_file_contents)[SecretKeys::ENCRYPTED]
+
+      secrets.encrypted_hash[SecretKeys::ENCRYPTED].each do |key, value|
+        if key == "foo" || key == "plaintext"
+          expect(value).to_not eq original_encrypted[key]
+        else
+          expect(value).to eq original_encrypted[key]
+        end
+      end
+    end
   end
 
   describe "#encrypt!" do
