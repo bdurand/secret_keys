@@ -6,7 +6,6 @@ require "io/console"
 require_relative "../secret_keys.rb"
 
 module SecretKeys::CLI
-
   class Base
     attr_reader :secrets
 
@@ -105,7 +104,7 @@ module SecretKeys::CLI
         @new_secret_key = value
       end
 
-      @in_place
+      @in_place = false
       opts.on("--in-place", "Update the input file instead of writing to an output file.") do |value|
         @in_place = true
       end
@@ -157,5 +156,4 @@ module SecretKeys::CLI
     def run
     end
   end
-
 end
