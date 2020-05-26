@@ -18,14 +18,19 @@ module SecretKeys::CLI
     def parse_additional_options(opts)
     end
 
+    # Subclasses should return the action name for the help banner
+    def action_name
+      "<encrypt|decrypt|read|edit>"
+    end
+
     # Subclasses must implement this method to execute the logic.
-    def run
+    def run!
       raise NotImplementedError
     end
 
     # This method should be called when referencing the output stream. It will yield to the
     # block with a stream.
-    def with_output_stream
+    def output
       if @output.respond_to?(:write)
         yield(@output)
         @output.flush
@@ -37,6 +42,15 @@ module SecretKeys::CLI
       nil
     end
 
+    # Return the output format.
+    def format
+      if [:json, :yaml].include?(@format)
+        @format
+      else
+        secrets.input_format
+      end
+    end
+
     private
 
     def parse_options(argv)
@@ -44,7 +58,7 @@ module SecretKeys::CLI
       @format = nil
 
       OptionParser.new do |opts|
-        opts.banner = "Usage: secret_keys <encrypt|decrypt|read|edit> [options] [--] INFILE [OUTFILE|-]"
+        opts.banner = "Usage: secret_keys #{action_name} [options] [--] INFILE [OUTFILE|-]"
 
         opts.on("--help", "Prints this help") do
           puts opts.help
@@ -60,7 +74,7 @@ module SecretKeys::CLI
         end
 
         opts.on("-f", "--format [FORMAT]", [:json, :yaml, :auto], "Set the output format. By default this will be the same as the input format.") do |value|
-          @format = get_format(value)
+          @format = value
         end
 
         parse_additional_options(opts)
@@ -85,19 +99,13 @@ module SecretKeys::CLI
         value
       end
     end
-
-    def get_format(value)
-      if value.downcase == "json"
-        :json
-      elsif value.downcase == "yaml"
-        :yaml
-      else
-        raise ArgumentError.new("format must be either YAML or JSON")
-      end
-    end
   end
 
   class Encrypt < Base
+    def action_name
+      "encrypt"
+    end
+
     def parse_additional_options(opts)
       @new_secret_key = nil
       opts.on("--new-secret-key ENCRYPTION_KEY", String, "Encryption key used to encrypt strings in the file on output. This option can be used to change the encryption key.") do |value|
@@ -110,16 +118,46 @@ module SecretKeys::CLI
       end
     end
 
-    def run
+    def run!
+      if @in_place && @input.is_a?(String)
+        @output = @input
+      end
+
+      if @new_secret_key && !@new_secret_key.empty?
+        secrets.encryption_key = @new_secret_key
+      end
+
+      encrypted = secrets.encrypted_hash
+      string = (format == :yaml ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+      string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
+
+      output do |stream|
+        stream.write(string)
+      end
     end
   end
 
   class Decrypt < Base
-    def run
+    def action_name
+      "decrypt"
+    end
+
+    def run!
+      decrypted = secrets.to_h
+      string = (format == :yaml ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
+      string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
+
+      output do |stream|
+        stream.write(string)
+      end
     end
   end
 
   class Read < Base
+    def action_name
+      "read"
+    end
+
     def parse_additional_options(opts)
       @key = nil
       opts.on("-k", "--key KEY", String, "Key from the file to output. You can use dot notation to read a nested key.") do |value|
@@ -127,17 +165,23 @@ module SecretKeys::CLI
       end
     end
 
-    def run
+    def run!
       raise ArgumentError.new("key is required") if @key.nil? || @key.empty?
       val = secrets.to_h
       @key.split(".").each do |key|
         val = secrets[key] if val.is_a?(Hash)
       end
-      val
+      output do |stream|
+        stream.write(val)
+      end
     end
   end
 
   class Edit < Base
+    def action_name
+      "edit"
+    end
+
     def parse_additional_options(opts)
       @actions = []
       opts.on("-e", "--set-encrypted KEY[=VALUE]", String, "Set an encrypted value in the file. You can use dot notation to set a nested value. If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.") do |value|
@@ -153,7 +197,8 @@ module SecretKeys::CLI
       end
     end
 
-    def run
+    def run!
+      # TODO
     end
   end
 end

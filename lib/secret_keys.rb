@@ -137,6 +137,13 @@ class SecretKeys < DelegateClass(Hash)
     @original_encrypted = {}
     update_secret(key: new_encryption_key)
   end
+  
+  # Return the data format (:json or :yaml) for the original data. Defaults to :json.
+  #
+  # @return [String]
+  def input_format
+    @format
+  end
 
   private
 
@@ -296,11 +303,7 @@ class SecretKeys < DelegateClass(Hash)
   def update_secret(key: nil, salt: nil)
     @encryption_key = key unless key.nil? || key.empty?
     @salt = salt unless salt.nil? || salt.empty?
-
-    # Only update the secret if encryption key and salt are present
-    if !@encryption_key.nil? && !@salt.nil?
-      @encryptor = Encryptor.new(@encryption_key, @salt)
-    end
+    @encryptor = Encryptor.new(@encryption_key, @salt)
     # Don't accidentally return the secret, dammit
     nil
   end
