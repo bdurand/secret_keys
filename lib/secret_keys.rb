@@ -101,12 +101,12 @@ class SecretKeys < DelegateClass(Hash)
     end
   end
 
-  # Parse a JSON stream or file with encrypted values. Any values in the ".encrypted" key
-  # in the JSON document will be decrypted with the provided encryption key. If values
+  # Parse a JSON or YAML stream or file with encrypted values. Any values in the ".encrypted" key
+  # in the document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
   #
-  # @param [String, #read, Hash] path_or_stream path to a json/yaml file to load, an IO object, or a Hash (mostly for testing purposes)
+  # @param [String, #read, Hash] path_or_stream path to a JSON/YAML file to load, an IO object, or a Hash (mostly for testing purposes)
   # @param [String] encryption_key secret to use for encryption/decryption
   #
   # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
@@ -114,6 +114,7 @@ class SecretKeys < DelegateClass(Hash)
   def initialize(path_or_stream, encryption_key = nil)
     @encryption_key = nil
     @salt = nil
+    @format = :json
 
     encryption_key = read_encryption_key(encryption_key)
     update_secret(key: encryption_key)
@@ -124,7 +125,7 @@ class SecretKeys < DelegateClass(Hash)
     super(@values)
   end
 
-  # Convert the value into an actual Hash object.
+  # Convert into an actual Hash object.
   #
   # @return [Hash]
   def to_h
@@ -158,28 +159,29 @@ class SecretKeys < DelegateClass(Hash)
     @secret_keys.include?(key)
   end
 
-  # Save the JSON to a file at the specified path. Encrypted values in the file
+  # Save the encrypted hash to a file at the specified path. Encrypted values in an existing file
   # will not be updated if the values have not changed (since each call uses a
-  # different initialization vector).
+  # different initialization vector). This can be helpful if you have your secrets in source
+  # control so that only changed keys will actually be changed in the file when it is updated.
   #
-  # @param [String] path Filepath to save to. Supports yaml and json format as the extension
-  # @param [Boolean] update: check to see if values have been changed before overwriting
+  # @param [String, Pathname] path path of the file to save. If the file exists, only changed values will be updated.
+  # @param [String, Symbol] format: output format (YAML or JSON) to use. This will default based on the extension on the file path or the format originally used
   # @return [void]
-  def save(path, update: true)
+  def save(path, format: nil)
     # create a copy of the encrypted hash for working on
     encrypted = encrypted_hash
 
-    if File.exist?(path) && update
-      original_data = File.read(path)
-      original_hash = parse_data(original_data)
-      original_encrypted = original_hash[ENCRYPTED] if original_hash
-      # only check for unchanged keys if the original had encryption with the same key
-      if original_encrypted && encryption_key_matches?(original_encrypted[ENCRYPTION_KEY])
-        restore_unchanged_keys!(encrypted[ENCRYPTED], original_encrypted)
+    if format.nil?
+      if yaml_file?(path)
+        format = :yaml
+      elsif json_file?(path)
+        format = :json
       end
     end
+    format ||= @format
+    format = format.to_s.downcase
 
-    output = (yaml_file?(path) ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
+    output = (format == "yaml" ? YAML.dump(encrypted) : "#{JSON.pretty_generate(encrypted)}#{$/}")
     File.open(path, "w") do |file|
       file.write(output)
     end
@@ -187,7 +189,7 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   # Output the keys as a hash that matches the structure that can be loaded by the initalizer.
-  # Note that all encrypted values will be re-salted when they are encrypted.
+  # Values that have not changed will not be re-salted so the encrypted values will remain the same.
   #
   # @return [Hash] An encrypted hash that can be saved/parsed by a new instance of {SecretKeys}
   def encrypted_hash
@@ -202,10 +204,13 @@ class SecretKeys < DelegateClass(Hash)
         hash[key] = value
       end
     end
-    encrypted = {
-      SALT => @salt,
-      ENCRYPTION_KEY => key_dummy_value
-    }.merge(encrypt_values(encrypted))
+
+    unless encryption_key_matches?(@original_encrypted[ENCRYPTION_KEY])
+      @original_encrypted = {}
+    end
+    encrypted.merge!(encrypt_values(encrypted, @original_encrypted))
+    encrypted[SALT] = @salt
+    encrypted[ENCRYPTION_KEY] = (@original_encrypted[ENCRYPTION_KEY] || key_dummy_value)
 
     hash[ENCRYPTED] = encrypted
     hash
@@ -216,6 +221,7 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String] new_encryption_key encryption key to use for future {#save} calls
   # @return [void]
   def encryption_key=(new_encryption_key)
+    @original_encrypted = {}
     update_secret(key: new_encryption_key)
   end
 
@@ -239,6 +245,7 @@ class SecretKeys < DelegateClass(Hash)
   def load_secrets!(path_or_stream)
     @secret_keys = Set.new
     @values = {}
+    @original_encrypted = {}
 
     hash = nil
     if path_or_stream.is_a?(Hash)
@@ -250,10 +257,12 @@ class SecretKeys < DelegateClass(Hash)
       data = path_or_stream.read
       hash = parse_data(data)
     end
+
     return if hash.nil? || hash.empty?
 
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
+      @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
       update_secret(salt: encrypted_values.delete(SALT))
 
@@ -272,23 +281,35 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String] data file data to parse
   # @return [Hash] data parsed to a hash
   def parse_data(data)
+    @format = :json
     JSON.parse(data)
   rescue JSON::JSONError
+    @format = :yaml
     YAML.safe_load(data)
   end
 
   # Recursively encrypt all values.
-  def encrypt_values(values)
+  def encrypt_values(values, original)
     if values.is_a?(Hash)
       encrypted_hash = {}
       values.keys.each do |key|
-        encrypted_hash[key.to_s] = encrypt_values(values[key])
+        original_value = original[key] if original.is_a?(Hash)
+        encrypted_hash[key.to_s] = encrypt_values(values[key], original_value)
       end
       encrypted_hash
     elsif values.is_a?(Enumerable)
-      values.collect { |value| encrypt_values(value) }
+      if original.is_a?(Enumerable)
+        values.zip(original).collect { |value, original_value| encrypt_values(value, original_value) }
+      else
+        values.collect { |value| encrypt_values(value, nil) }
+      end
     else
-      encrypt_value(values)
+      decrypted_original = decrypt_value(original)
+      if decrypted_original == values && decrypted_original != original
+        original
+      else
+        encrypt_value(values)
+      end
     end
   end
 
@@ -304,37 +325,6 @@ class SecretKeys < DelegateClass(Hash)
       values.collect { |value| decrypt_values(value) }
     else
       decrypt_value(values)
-    end
-  end
-
-  # Since the encrypted values include a salt, make sure we don't overwrite values in the stored
-  # documents when the decrypted values haven't changed since this would mess up any file history
-  # in a source code repository.
-  def restore_unchanged_keys!(new_hash, old_hash)
-    if new_hash.is_a?(Hash) && old_hash.is_a?(Hash)
-      new_hash.keys.each do |key|
-        new_value = new_hash[key]
-        old_value = old_hash[key]
-        next if new_value == old_value
-
-        if new_value.is_a?(Enumerable) && old_value.is_a?(Enumerable)
-          restore_unchanged_keys!(new_value, old_value)
-        elsif equal_encrypted_values?(new_value, old_value)
-          new_hash[key] = old_value
-        end
-      end
-    elsif new_hash.is_a?(Array) && old_hash.is_a?(Array)
-      new_hash.size.times do |i|
-        new_val = new_hash[i]
-        old_val = old_hash[i]
-        if new_val != old_val
-          if new_val.is_a?(Enumerable) && old_val.is_a?(Enumerable)
-            restore_unchanged_keys!(new_val, old_val)
-          elsif equal_encrypted_values?(new_val, old_val)
-            new_hash[i] = old_val
-          end
-        end
-      end
     end
   end
 
@@ -374,7 +364,7 @@ class SecretKeys < DelegateClass(Hash)
     end
   end
 
-  # This is a
+  # This is a known value that we can encrypt to determine if the secret has changed.
   def key_dummy_value
     encrypt_value(KNOWN_DUMMY_VALUE)
   end
@@ -390,6 +380,11 @@ class SecretKeys < DelegateClass(Hash)
   def yaml_file?(path)
     ext = path.split(".").last.to_s.downcase
     ext == "yaml" || ext == "yml"
+  end
+
+  def json_file?(path)
+    ext = path.split(".").last.to_s.downcase
+    ext == "json"
   end
 
   # Update the secret key by updating the salt
