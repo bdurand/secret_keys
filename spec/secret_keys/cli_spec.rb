@@ -8,6 +8,13 @@ describe SecretKeys::CLI do
   let(:encrypted_file_path) { File.join(__dir__, "..", "fixtures", "encrypted.json") }
   let(:secret_key_path) { File.join(__dir__, "..", "fixtures", "secret_key") }
 
+  around :each do |example|
+    $stdin = StringIO.new("{}")
+    example.call
+  ensure
+    $stdin = STDIN
+  end
+
   describe SecretKeys::CLI::Base do
     describe "secret key options" do
       it "should set the secret key from the --secret-key option" do
@@ -21,7 +28,7 @@ describe SecretKeys::CLI do
       end
 
       it "should read the secret key from STDIN with the --secret-key=- option" do
-        stub_const("STDIN", StringIO.new("foobar"))
+        $stdin = StringIO.new("foobar")
         command = SecretKeys::CLI::Base.new(["--secret-key", "-"])
         expect(command.secret_key).to eq "foobar"
       end
@@ -56,16 +63,16 @@ describe SecretKeys::CLI do
     end
 
     describe "input and output files" do
-      it "should default to using STDIN and STDOUT" do
+      it "should default to using $stdin and $stdout" do
         command = SecretKeys::CLI::Base.new([])
-        expect(command.input).to eq STDIN
-        expect(command.output).to eq STDOUT
+        expect(command.input).to eq $stdin
+        expect(command.output).to eq $stdout
       end
 
-      it "should use STDIN and STDOUT if set to -" do
+      it "should use $stdin and $stdout if set to -" do
         command = SecretKeys::CLI::Base.new(["-", "-"])
-        expect(command.input).to eq STDIN
-        expect(command.output).to eq STDOUT
+        expect(command.input).to eq $stdin
+        expect(command.output).to eq $stdout
       end
 
       it "should set the input and output to file paths" do
@@ -79,7 +86,7 @@ describe SecretKeys::CLI do
       it "should yield the output stream" do
         command = SecretKeys::CLI::Base.new(["-", "-"])
         command.output_stream do |stream|
-          expect(stream).to eq STDOUT
+          expect(stream).to eq $stdout
         end
       end
 

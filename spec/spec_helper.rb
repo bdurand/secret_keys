@@ -5,4 +5,5 @@ require "climate_control"
 
 RSpec.configure do |config|
   config.warnings = true
+  config.order = :random
 end

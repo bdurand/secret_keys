@@ -98,18 +98,18 @@ module SecretKeys::CLI
 
       raise ArgumentError.new("Too many arguments") if argv.size > 2
       @input = argv.shift
-      @input = STDIN if @input.nil? || @input == "-"
+      @input = $stdin if @input.nil? || @input == "-"
 
       @output = argv.first
-      @output = STDOUT if @output.nil? || output == "-"
+      @output = $stdout if @output.nil? || output == "-"
     end
 
     def get_secret_key(value)
       if value == "-"
-        if STDIN.tty?
-          STDIN.getpass("Secret key: ")
+        if $stdin.tty?
+          $stdin.getpass("Secret key: ")
         else
-          STDIN.gets
+          $stdin.gets
         end
       else
         value
@@ -183,11 +183,7 @@ module SecretKeys::CLI
       raise ArgumentError.new("key is required") if @key.nil? || @key.empty?
       val = secrets.to_h
       @key.split(".").each do |key|
-        if val.is_a?(Hash)
-          val = val[key]
-        else
-          val = nil
-        end
+        val = val[key] if val.is_a?(Hash)
       end
       output_stream do |stream|
         stream.write(val)
