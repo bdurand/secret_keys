@@ -58,6 +58,15 @@ module SecretKeys::CLI
       secrets.input_format
     end
 
+    protected
+
+    def encrypted_file_contents
+      encrypted = secrets.encrypted_hash
+      string = (format == :yaml ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+      string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
+      string
+    end
+
     private
 
     def parse_options(argv)
@@ -134,12 +143,8 @@ module SecretKeys::CLI
         secrets.encryption_key = @new_secret_key
       end
 
-      encrypted = secrets.encrypted_hash
-      string = (format == :yaml ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
-      string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
-
-      output_stream do |stream|
-        stream.write(string)
+      output_stream do |output|
+        output.write(encrypted_file_contents)
       end
     end
   end
@@ -178,7 +183,11 @@ module SecretKeys::CLI
       raise ArgumentError.new("key is required") if @key.nil? || @key.empty?
       val = secrets.to_h
       @key.split(".").each do |key|
-        val = secrets[key] if val.is_a?(Hash)
+        if val.is_a?(Hash)
+          val = val[key]
+        else
+          val = nil
+        end
       end
       output_stream do |stream|
         stream.write(val)
@@ -204,12 +213,45 @@ module SecretKeys::CLI
         @actions << [:decrypt, key, val]
       end
       opts.on("-r", "--remove KEY", String, "Remove a key from the file. You can use dot notation to remove a nested value.") do |value|
-        @actions << [:remove, value]
+        @actions << [:remove, value, nil]
       end
     end
 
     def run!
-      # TODO
+      @actions.each do |action, key, value|
+        raise ArgumentError.new("cannot set a key beginning with dot") if key.start_with?(".")
+        case action
+        when :encrypt
+          secrets.encrypt!(key.split(".").first)
+          set_value(secrets, key, value) unless value.nil?
+        when :decrypt
+          secrets.decrypt!(key.split(".").first)
+          set_value(secrets, key, value) unless value.nil?
+        when :remove
+          secrets.delete(key)
+        end
+      end
+
+      output_stream do |output|
+        output.write(encrypted_file_contents)
+      end
+    end
+
+    private
+
+    # Set a nested value
+    def set_value(hash, key, value)
+      k, rest = key.split(".", 2)
+      if rest
+        h = hash[k]
+        unless h.is_a?(Hash)
+          h = {}
+          hash[k] = h
+        end
+        set_value(h, rest, value)
+      else
+        hash[k] = value
+      end
     end
   end
 end
