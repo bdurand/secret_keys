@@ -9,10 +9,12 @@ describe SecretKeys::CLI do
   let(:secret_key_path) { File.join(__dir__, "..", "fixtures", "secret_key") }
 
   around :each do |example|
-    $stdin = StringIO.new("{}")
-    example.call
-  ensure
-    $stdin = STDIN
+    begin
+      $stdin = StringIO.new("{}")
+      example.call
+    ensure
+      $stdin = STDIN
+    end
   end
 
   describe SecretKeys::CLI::Base do
