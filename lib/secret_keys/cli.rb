@@ -7,7 +7,7 @@ require_relative "../secret_keys.rb"
 
 module SecretKeys::CLI
   class Base
-    attr_reader :secrets, :secret_key, :input, :output
+    attr_reader :secrets, :secret_key, :input
 
     def initialize(argv)
       parse_options(argv)
@@ -28,33 +28,9 @@ module SecretKeys::CLI
       raise NotImplementedError
     end
 
-    # This method should be called when referencing the output stream. It will yield to the
-    # block with a stream.
-    def output_stream
-      if @output.respond_to?(:write)
-        yield(@output)
-        @output.flush
-      else
-        File.open(@output, "w") do |file|
-          yield(file)
-        end
-      end
-      nil
-    end
-
     # Return the output format.
     def format
       return @format if [:json, :yaml].include?(@format)
-
-      if output.is_a?(String)
-        extension = output.split(".").last.downcase
-        if extension == "json"
-          return :json
-        elsif ["yaml", "yml"].include?(extension)
-          return :yaml
-        end
-      end
-
       secrets.input_format
     end
 
@@ -74,7 +50,7 @@ module SecretKeys::CLI
       @format = nil
 
       OptionParser.new do |opts|
-        opts.banner = "Usage: secret_keys #{action_name} [options] [--] INFILE [OUTFILE|-]"
+        opts.banner = "Usage: secret_keys #{action_name} [options] [--] [INFILE|-]"
 
         opts.on("--help", "Prints this help") do
           puts opts.help
@@ -96,12 +72,10 @@ module SecretKeys::CLI
         parse_additional_options(opts)
       end.order!(argv)
 
-      raise ArgumentError.new("Too many arguments") if argv.size > 2
       @input = argv.shift
       @input = $stdin if @input.nil? || @input == "-"
 
-      @output = argv.first
-      @output = $stdout if @output.nil? || output == "-"
+      raise ArgumentError.new("Too many arguments") unless argv.empty?
     end
 
     def get_secret_key(value)
@@ -129,22 +103,23 @@ module SecretKeys::CLI
       end
 
       @in_place = false
-      opts.on("--in-place", "Update the input file instead of writing to an output file.") do |value|
+      opts.on("--in-place", "Update the input file instead of writing to stdout.") do |value|
         @in_place = true
       end
     end
 
     def run!
-      if @in_place && @input.is_a?(String)
-        @output = @input
-      end
-
       if @new_secret_key && !@new_secret_key.empty?
         secrets.encryption_key = @new_secret_key
       end
 
-      output_stream do |output|
-        output.write(encrypted_file_contents)
+      if @in_place && @input.is_a?(String)
+        File.open(@input, "w") do |file|
+          file.write(encrypted_file_contents)
+        end
+      else
+        $stdout.write(encrypted_file_contents)
+        $stdout.flush
       end
     end
   end
@@ -158,10 +133,8 @@ module SecretKeys::CLI
       decrypted = secrets.to_h
       string = (format == :yaml ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
-
-      output_stream do |stream|
-        stream.write(string)
-      end
+      $stdout.write(string)
+      $stdout.flush
     end
   end
 
@@ -183,15 +156,19 @@ module SecretKeys::CLI
       raise ArgumentError.new("key is required") if @key.nil? || @key.empty?
       val = secrets.to_h
       @key.split(".").each do |key|
-        val = val[key] if val.is_a?(Hash)
+        if val.is_a?(Hash)
+          val = val[key]
+        else
+          val = nil
+          break
+        end
       end
-      output_stream do |stream|
-        stream.write(val)
-      end
+      $stdout.write(val)
+      $stdout.flush
     end
   end
 
-  class Edit < Base
+  class Edit < Encrypt
     attr_reader :actions
 
     def action_name
@@ -199,6 +176,8 @@ module SecretKeys::CLI
     end
 
     def parse_additional_options(opts)
+      super
+
       @actions = []
       opts.on("-e", "--set-encrypted KEY[=VALUE]", String, "Set an encrypted value in the file. You can use dot notation to set a nested value. If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.") do |value|
         key, val = value.split("=", 2)
@@ -228,9 +207,7 @@ module SecretKeys::CLI
         end
       end
 
-      output_stream do |output|
-        output.write(encrypted_file_contents)
-      end
+      super
     end
 
     private
