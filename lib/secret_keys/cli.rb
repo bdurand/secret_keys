@@ -7,19 +7,24 @@ require_relative "../secret_keys.rb"
 
 module SecretKeys::CLI
   class Base
-    attr_reader :secrets, :secret_key, :input
+    attr_reader :secret_key, :input
 
     MAX_SUMMARY_LENGTH = 80
 
     def initialize(argv)
       # make sure we can only use stdin once
       @stdin_used = false
+      @secrets = nil
       parse_options(argv)
-      @secrets = SecretKeys.new(@input, @secret_key)
     end
 
     # Subclasses can override this method to parse additional options beyond the standard set.
     def parse_additional_options(opts)
+    end
+
+    # @return [SecretKeys] the secrets
+    def secrets
+      @secrets ||= SecretKeys.new(@input, @secret_key)
     end
 
     # Subclasses should return the action name for the help banner
@@ -151,9 +156,12 @@ module SecretKeys::CLI
         secrets.encryption_key = @new_secret_key
       end
 
-      if @in_place && @input.is_a?(String)
+      if @in_place
+        raise ArgumentError, "Cannot perform in place editing on streams" unless @input.is_a?(String)
+        # make sure we read the file **before** writing to it.
+        contents = encrypted_file_contents
         File.open(@input, "w") do |file|
-          file.write(encrypted_file_contents)
+          file.write(contents)
         end
       else
         $stdout.write(encrypted_file_contents)

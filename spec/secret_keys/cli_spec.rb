@@ -54,7 +54,7 @@ describe SecretKeys::CLI do
 
     describe "output format option" do
       it "should json as default" do
-        command = SecretKeys::CLI::Base.new([])
+        command = SecretKeys::CLI::Base.new(["-s TEST"])
         expect(command.format).to eq :json
       end
 
@@ -64,7 +64,7 @@ describe SecretKeys::CLI do
       end
 
       it "should uset the default format from secrets input format if not specified" do
-        command = SecretKeys::CLI::Base.new([])
+        command = SecretKeys::CLI::Base.new(["-s TEST"])
         expect(command.secrets).to receive(:input_format).and_return(:yaml)
         expect(command.format).to eq :yaml
       end
@@ -115,6 +115,11 @@ describe SecretKeys::CLI do
       ensure
         temp_file.unlink
       end
+    end
+
+    it "should raise on error on --in-place when passed stdin" do
+      command = SecretKeys::CLI::Encrypt.new(["--secret-key=SECRET_KEY", "--in-place", "-"])
+      expect { command.run! }.to raise_error(ArgumentError)
     end
 
     it "should encrypt the input file using a new encryption key" do

@@ -173,8 +173,6 @@ class SecretKeys < DelegateClass(Hash)
 
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
-      raise EncryptionKeyError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
-
       @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
       salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
@@ -331,6 +329,9 @@ class SecretKeys < DelegateClass(Hash)
     if encryption_key_file && !encryption_key_file.empty? && File.exist?(encryption_key_file)
       encryption_key = File.read(encryption_key_file).chomp
     end
+
+    # final check if encryption key was passed in
+    raise EncryptionKeyError.new("Encryption key not specified") if encryption_key.nil? || encryption_key.empty?
 
     encryption_key
   end
