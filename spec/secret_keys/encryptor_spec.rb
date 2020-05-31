@@ -4,7 +4,7 @@ require_relative "../spec_helper"
 
 describe SecretKeys::Encryptor do
   let(:password) { "SECRET_KEY" }
-  let(:salt) { "deadbeef" }
+  let(:salt) { 0xdeadbeef }
   let(:encryptor) { SecretKeys::Encryptor.from_password(password, salt) }
 
   describe "#encrypt" do
@@ -27,7 +27,7 @@ describe SecretKeys::Encryptor do
     end
 
     it "should not encrypt an empty string" do
-      encryptor = SecretKeys::Encryptor.from_password("SECRET_KEY", "deadbeef")
+      encryptor = SecretKeys::Encryptor.from_password("SECRET_KEY", salt)
       expect(encryptor.encrypt("")).to eq ""
     end
   end
@@ -39,14 +39,8 @@ describe SecretKeys::Encryptor do
     end
 
     it "should raise an error if salt is invalid" do
-      expect { SecretKeys::Encryptor.from_password(password, "1023ef1f") }.to_not raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, "1023EF1F") }.to_not raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, "23ef1f") }.to_not raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, 123344) }.to_not raise_error(ArgumentError)
       expect { SecretKeys::Encryptor.from_password(password, nil) }.to raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, "") }.to raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, "d") }.to raise_error(ArgumentError)
-      expect { SecretKeys::Encryptor.from_password(password, "nothex") }.to raise_error(ArgumentError)
+      expect { SecretKeys::Encryptor.from_password(password, "001") }.to raise_error(ArgumentError)
     end
   end
 
@@ -58,7 +52,7 @@ describe SecretKeys::Encryptor do
 
   describe ".encrypted?" do
     it "should determine if a value is encrypted" do
-      encryptor = SecretKeys::Encryptor.from_password("key", "00000000")
+      encryptor = SecretKeys::Encryptor.from_password("key", 0)
       encrypted_value = encryptor.encrypt("foobar")
       expect(SecretKeys::Encryptor.encrypted?(encrypted_value)).to eq true
       expect(SecretKeys::Encryptor.encrypted?("foobar")).to eq false

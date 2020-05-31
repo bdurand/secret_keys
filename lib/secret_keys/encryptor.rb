@@ -15,21 +15,17 @@ class SecretKeys::Encryptor
   KDF_ITERATIONS = 20_000
   HASH_FUNC = "sha256"
   KEY_LENGTH = 32
-  # Valid salts are hexencoded strings
-  SALT_MATCHER = /\A(\h\h)+\z/i.freeze
 
   class << self
     # Create an instance from a secret and salt.
     # @param [String] password secret used to encrypt the data
-    # @param [String, Integer] salt random hex-encoded salt for key derivation
+    # @param [Integer] salt random salt for key derivation.
     # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
     def from_password(password, salt)
       raise ArgumentError, "Password must be present" if password.nil? || password.empty?
-      salt = "0#{salt}" if salt.is_a?(String) && salt.size.odd? && salt.size > 1
-      raise ArgumentError, "Salt must be a hex encoded value" unless salt && (salt.is_a?(Integer) || SALT_MATCHER.match?(salt))
+      raise ArgumentError, "Salt must be an integer" unless salt.is_a?(Integer)
       # Convert the salt to raw byte string
-      salt = salt.to_i.to_s(16) if salt.is_a?(Integer)
-      salt_bytes = [salt.downcase].pack("H*")
+      salt_bytes = [salt.to_s(16)].pack("H*")
       derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
 
       new(derived_key)
@@ -40,18 +36,14 @@ class SecretKeys::Encryptor
       value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX) && value.size > ENCRYPTED_PREFIX.size
     end
 
-    # Derive a  key of given length from a password and salt value.
-    def derive_key(password, salt:, length:)
+    # Derive a key of given length from a password and salt value.
+    def derive_key(password, salt:, length:, iterations: KDF_ITERATIONS, hash: HASH_FUNC)
       if defined?(OpenSSL::KDF)
-        OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+        OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: iterations, length: length, hash: hash)
       else
-        OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
+        # Ruby 2.4 compatibility
+        OpenSSL::PKCS5.pbkdf2_hmac(password, salt, iterations, length, hash)
       end
-    end
-
-    # @return [String] hex encoded random bytes
-    def random_salt
-      SecureRandom.hex(8)
     end
   end
 

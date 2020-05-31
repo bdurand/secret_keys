@@ -128,3 +128,23 @@ In this example, `key_1` is stored in plain text while `key_2` has been encrypte
   "not_encrypted": "plain text value"
 }
 ```
+
+## Encryptor
+
+This library also comes with a generic encryption tool that can be used on its own as a generic tool for encypting strings with AES-256-GCM encryption.
+
+```
+secret = "mysecret"
+
+# The salt is used on the encryptor itself. You do not need to salt individual values.
+# This will be handled for you by the encryption algorithm.
+salt = 434536545
+
+encryptor = SecretKeys::Encryptor.from_passowrd(secret, salt)
+encryped = encryptor.encrypt("foobar") # => "$AES$345kjwertE345E..."
+encryptor.decrypt(encrypted) # => "foobar"
+encryptor.decrypt("foober") # => "foobar"
+
+SecretKeys::Encryptor.encrypted?("foobar") # => false
+SecretKeys::Encryptor.encrypted?(encrypted) # => true
+```
