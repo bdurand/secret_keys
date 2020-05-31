@@ -54,8 +54,8 @@ describe SecretKeys do
       expect { SecretKeys.new(encrypted_file_path, "not_the_key") }.to raise_error(SecretKeys::EncryptionKeyError)
     end
 
-    it "should load an unencrypted JSON file without an encryption key" do
-      not_secret = SecretKeys.new(decrypted_file_path, nil)
+    it "should load an unencrypted JSON file with any encryption key" do
+      not_secret = SecretKeys.new(decrypted_file_path, "pass")
       expect(not_secret.to_h).to eq secrets.to_h
     end
 

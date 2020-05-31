@@ -1,24 +1,24 @@
 {
+  "not_encrypted": "plain text value",
   ".encrypted": {
-    ".salt": "aecdfdb296983ec0",
-    ".key": "$AES$:LNkaWu/g7gM7zu4qC/4FAGOANOLWcY86uqxQfFiHRVSvXSA23pY",
-    "foo": "$AES$:XcbGIW9ABbfcMv79+YK0MC8P7WWtEAfE2Y8S/MMN5Q",
+    "foo": "$AES$:ANsXWM5MmDV0EGvaa/6+A2K09V+s6tQalwp2hZzspw",
     "count": 1,
     "array": [
-      "$AES$:1WPr25fkbVbQWvTCiEHJOPT50970Z+D8qkYTnTk",
-      "$AES$:tTLDauGcGHK50SJhLKa7OHGkxHt6gCvI/vvus7g",
-      "$AES$:FgSCK3pG8RBtYFqzO/WmNwus2SABI5zGGmfkPEw"
+      "$AES$:c2u6BYsuNOFUrxt3EbgdJSyoEPy0PI8KX/12G9c",
+      "$AES$:JPPp5OUsiLukVEum8JjNjBfxxz1r6vhWlphg0u4",
+      "$AES$:hoZ4uE64wr8KFoRGFZgqZ1VoUZiFiJTEs8KO+Rw"
     ],
     "complex": {
-      "one": "$AES$:w0PjjvD6vXID28kaqE0z5CpNK08yfUaz5tCoKtdXTFarlsA",
-      "two": "$AES$:GnF2IxBtedvtjXE2pkvAyVXLrMzKZ4qAK6QoRe7JmPjioWU",
+      "one": "$AES$:sa8sMJfqysMxD6+Teo5NgshCaRjOCPuK+JOyEczZhKRQJw4",
+      "two": "$AES$:A6qNHdoxaa2EyI+399rBQ/ZoSZ+t3vPr7iS5qyE9e1PaJqA",
       "more": [
         {
-          "three": "$AES$:oIXK4QnQoqOKZsNceMN1CFqg1zmVHElWTXqAF4VPQNt1myw"
+          "three": "$AES$:sfksREzGmONovCfLud+aj4Hw/eDaIprW9s+2BqFRi159nhI"
         }
       ]
     },
-    "plaintext": "not encrypted"
-  },
-  "not_encrypted": "plain text value"
+    "plaintext": "not encrypted",
+    ".salt": "4fdb453a5653144c5345abb92c7477fc",
+    ".key": "$AES$:3IklTG0pStknboISiaoUj1aUiphnKuxIzz5tDlWCqoPnlQsdM4E"
+  }
 }

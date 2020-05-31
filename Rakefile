@@ -7,7 +7,7 @@ RSpec::Core::RakeTask.new(:spec)
 task default: :spec
 
 task :console do
-  require "secret_keys"
+  require File.join(__dir__, "lib/secret_keys")
   require "irb"
 
   ARGV.clear

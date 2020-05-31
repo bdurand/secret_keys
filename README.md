@@ -112,7 +112,7 @@ secret_keys decrypt --key mysecret /path/to/file.json
 
 The data can be stored in a plain old JSON file. Any unencrypted keys will appear under in the special `".encrypted"` key in the hash. The encryption key itself is also stored in the `".key"` key along with the encrypted values. This is used to confirm that the correct key is being used when decrypting the file.
 
-In this example, `key_1` is stored in plain text while `key_2` has been encrypted.
+In this example, `not_encrypted` is stored in plain text while `foo` has been encrypted.
 
 ```json
 {
@@ -127,4 +127,27 @@ In this example, `key_1` is stored in plain text while `key_2` has been encrypte
   },
   "not_encrypted": "plain text value"
 }
+```
+
+## SecretKeys::Encryptor
+
+This library also comes with a generic encryption tool that can be used on its own as a generic tool for encypting strings with AES-256-GCM encryption.
+
+```ruby
+secret = "mysecret"
+# The salt is used to generate an encryption key from the secret.
+# You do not need to salt individual values when encrypting them.
+# This will be done by the encryption algorithm itself.
+# The salt must be a hex encoded byte array.
+salt = "deadbeef"
+
+encryptor = SecretKeys::Encryptor.from_passowrd(secret, salt)
+
+encryped = encryptor.encrypt("foobar") # => "$AES$345kjwertE345E..."
+encryptor.decrypt(encrypted) # => "foobar"
+encryptor.decrypt("foobar") # => "foobar"
+
+# You can also check if a value looks like an encrypted string.
+SecretKeys::Encryptor.encrypted?("foobar") # => false
+SecretKeys::Encryptor.encrypted?(encrypted) # => true
 ```
