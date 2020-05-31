@@ -15,7 +15,6 @@ module SecretKeys::CLI
       # make sure we can only use stdin once
       @stdin_used = false
       parse_options(argv)
-      p @input
       @secrets = SecretKeys.new(@input, @secret_key)
     end
 
@@ -64,6 +63,7 @@ module SecretKeys::CLI
         This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying '-'.
         HELP
         opts.on("-s", "--secret-key=SECRET", String, *secret_docs) do |value|
+          raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
           @secret_key = get_secret_key(value)
         end
 
@@ -72,6 +72,7 @@ module SecretKeys::CLI
         This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.
         HELP
         opts.on("--secret-key-file=PATH", String, *secret_file_docs) do |value|
+          raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
           @secret_key = File.read(value).chomp
         end
 

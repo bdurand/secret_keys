@@ -34,13 +34,21 @@ describe SecretKeys::CLI do
 
       it "should read the secret key from STDIN with the --secret-key=- option" do
         $stdin = StringIO.new("foobar")
-        command = SecretKeys::CLI::Base.new(["--secret-key", "-"])
+        command = SecretKeys::CLI::Base.new(["--secret-key", "-", decrypted_file_path])
         expect(command.secret_key).to eq "foobar"
       end
 
       it "should read the secret key from the --secret-key-file option" do
         command = SecretKeys::CLI::Base.new(["--secret-key-file", secret_key_path])
         expect(command.secret_key).to eq "SECRET_KEY"
+      end
+
+      it "should not allow using stdin for file and secret key" do
+        expect { SecretKeys::CLI::Base.new(["--secret-key", "-", "-"]) }.to raise_error(ArgumentError, /stdin/)
+      end
+
+      it "should not allow using both --secret-key and --secret-key-file" do
+        expect { SecretKeys::CLI::Base.new(["--secret-key", "-", "-"]) }.to raise_error(ArgumentError, /stdin/)
       end
     end
 
