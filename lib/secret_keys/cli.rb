@@ -69,7 +69,7 @@ module SecretKeys::CLI
 
         secret_file_docs = split(<<~HELP)
           Path to a file that contains the encryption key.
-          This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.
+          This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY_FILE environment variable.
         HELP
         opts.on("--secret-key-file=PATH", String, *secret_file_docs) do |value|
           raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
