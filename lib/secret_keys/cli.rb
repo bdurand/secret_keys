@@ -59,8 +59,8 @@ module SecretKeys::CLI
         opts.separator("\nGlobal options:")
 
         secret_docs = split(<<~HELP)
-        Encryption key used to encrypt strings in the file.
-        This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying '-'.
+          Encryption key used to encrypt strings in the file.
+          This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying '-'.
         HELP
         opts.on("-s", "--secret-key=SECRET", String, *secret_docs) do |value|
           raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
@@ -68,8 +68,8 @@ module SecretKeys::CLI
         end
 
         secret_file_docs = split(<<~HELP)
-        Path to a file that contains the encryption key.
-        This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.
+          Path to a file that contains the encryption key.
+          This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.
         HELP
         opts.on("--secret-key-file=PATH", String, *secret_file_docs) do |value|
           raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
@@ -113,7 +113,7 @@ module SecretKeys::CLI
     # @return [Array] array of strings from docstring, split at length
     def split(docstring, length: MAX_SUMMARY_LENGTH)
       docstring = docstring.strip
-      docstring.gsub!(/\s+/, ' ')
+      docstring.gsub!(/\s+/, " ")
       docstring.scan(/(.{1,#{length}})(?:\s+|\z)/).flatten
     end
 
@@ -136,7 +136,7 @@ module SecretKeys::CLI
       opts.on("--new-secret-key=NEW_SECRET", String, *split(<<~DOC)) do |value|
         Encryption key used to encrypt strings in the file on output.
         This option can be used to change the encryption key. If set to '-', read from STDIN.
-        DOC
+      DOC
         @new_secret_key = get_secret_key(value)
       end
 
@@ -219,8 +219,8 @@ module SecretKeys::CLI
 
       @actions = []
       set_encrypted_docs = split(<<~HELP)
-      Set an encrypted value in the file. You can use dot notation to set a nested value.
-      If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.
+        Set an encrypted value in the file. You can use dot notation to set a nested value.
+        If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.
       HELP
       opts.on("-e", "--set-encrypted KEY[=VALUE]", String, *set_encrypted_docs) do |value|
         key, val = value.split("=", 2)
@@ -228,8 +228,8 @@ module SecretKeys::CLI
       end
 
       set_decrypted_docs = split(<<~HELP)
-      Set a plain text value in the file. You can use dot notation to set a nested value. If no VALUE is specified,
-      the key will be moved to the plain text keys while keeping any existing value.
+        Set a plain text value in the file. You can use dot notation to set a nested value. If no VALUE is specified,
+        the key will be moved to the plain text keys while keeping any existing value.
       HELP
       opts.on("-d", "--set-decrypted KEY[=VALUE]", String, *set_decrypted_docs) do |value|
         key, val = value.split("=", 2)
