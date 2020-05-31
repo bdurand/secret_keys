@@ -9,7 +9,6 @@ module SecretKeys::CLI
   class Base
     attr_reader :secrets, :secret_key, :input
 
-    NO_ADDITIONAL_OPTIONS = :no_added_options
     MAX_SUMMARY_LENGTH = 80
 
     def initialize(argv)
@@ -22,7 +21,6 @@ module SecretKeys::CLI
 
     # Subclasses can override this method to parse additional options beyond the standard set.
     def parse_additional_options(opts)
-      NO_ADDITIONAL_OPTIONS
     end
 
     # Subclasses should return the action name for the help banner
@@ -59,6 +57,8 @@ module SecretKeys::CLI
       OptionParser.new do |opts|
         opts.banner = "Usage: secret_keys #{action_name} [options] [--] [INFILE|-]"
 
+        opts.separator("\nGlobal options:")
+
         secret_docs = split(<<~HELP)
         Encryption key used to encrypt strings in the file.
         This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying '-'.
@@ -79,16 +79,12 @@ module SecretKeys::CLI
           @format = value
         end
 
-        opts.separator("")
-
-        added_options = parse_additional_options(opts)
-
-        opts.separator("") unless added_options == NO_ADDITIONAL_OPTIONS
-
-        opts.on_tail("--help", "Prints this help") do
+        opts.on("-h", "--help", "Prints this help") do
           puts opts.help
           exit
         end
+
+        parse_additional_options(opts)
       end.order!(argv)
 
       @input = argv.shift
@@ -133,6 +129,8 @@ module SecretKeys::CLI
     end
 
     def parse_additional_options(opts)
+      opts.separator("\nEncrypt options:")
+
       @new_secret_key = nil
       opts.on("--new-secret-key=NEW_SECRET", String, *split(<<~DOC)) do |value|
         Encryption key used to encrypt strings in the file on output.
@@ -185,6 +183,7 @@ module SecretKeys::CLI
     end
 
     def parse_additional_options(opts)
+      opts.separator("\n Read options:")
       @key = nil
       opts.on("-k", "--key KEY", String, "Key from the file to output. You can use dot notation to read a nested key.") do |value|
         @key = value
@@ -215,20 +214,32 @@ module SecretKeys::CLI
     end
 
     def parse_additional_options(opts)
-      super
+      opts.separator("\nEdit options:")
 
       @actions = []
-      opts.on("-e", "--set-encrypted KEY[=VALUE]", String, "Set an encrypted value in the file. You can use dot notation to set a nested value. If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.") do |value|
+      set_encrypted_docs = split(<<~HELP)
+      Set an encrypted value in the file. You can use dot notation to set a nested value.
+      If no VALUE is specified, the key will be moved to the encrypted keys while keeping any existing value.
+      HELP
+      opts.on("-e", "--set-encrypted KEY[=VALUE]", String, *set_encrypted_docs) do |value|
         key, val = value.split("=", 2)
         @actions << [:encrypt, key, val]
       end
-      opts.on("-d", "--set-decrypted KEY[=VALUE]", String, "Set a plain text value in the file. You can use dot notation to set a nested value. If no VALUE is specified, the key will be moved to the plain text keys while keeping any existing value.") do |value|
+
+      set_decrypted_docs = split(<<~HELP)
+      Set a plain text value in the file. You can use dot notation to set a nested value. If no VALUE is specified,
+      the key will be moved to the plain text keys while keeping any existing value.
+      HELP
+      opts.on("-d", "--set-decrypted KEY[=VALUE]", String, *set_decrypted_docs) do |value|
         key, val = value.split("=", 2)
         @actions << [:decrypt, key, val]
       end
+
       opts.on("-r", "--remove KEY", String, "Remove a key from the file. You can use dot notation to remove a nested value.") do |value|
         @actions << [:remove, value, nil]
       end
+
+      super
     end
 
     def run!
