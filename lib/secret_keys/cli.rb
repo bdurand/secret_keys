@@ -122,6 +122,34 @@ module SecretKeys::CLI
       raise ArgumentError, "stdin (-) cannot be specified multiple times" if @stdin_used
       @stdin_used = true
     end
+
+    # @param parent data structure to recurse over
+    # @param key to access
+    # @yield context of key and parent
+    # @yieldparam parent the parent object
+    # @yieldparam key the last child node
+    def access_key(parent, key, write: false)
+      splits = key.split(".")
+      last_key = splits.length - 1
+      splits.each_with_index do |curr, idx|
+        if parent.is_a?(Array)
+          k = curr.to_i
+          raise ArgumentError, "Array index must be a positive number" if curr != k.to_s || k < 0
+        elsif parent.respond_to?(:[])
+          k = curr
+        else
+          raise ArgumentError, "No such key: #{key.inspect}"
+        end
+
+        return yield(parent, k) if idx == last_key
+
+        if parent[k].nil?
+          return nil unless write
+          parent[k] = {}
+        end
+        parent = parent[k]
+      end
+    end
   end
 
   class Encrypt < Base
@@ -194,14 +222,7 @@ module SecretKeys::CLI
     def run!
       raise ArgumentError.new("key is required") if @key.nil? || @key.empty?
       val = secrets.to_h
-      @key.split(".").each do |key|
-        if val.is_a?(Hash)
-          val = val[key]
-        else
-          val = nil
-          break
-        end
-      end
+      val = access_key(val, @key) { |parent, key| parent[key] }
       $stdout.write(val)
       $stdout.flush
     end
@@ -249,33 +270,30 @@ module SecretKeys::CLI
         case action
         when :encrypt
           secrets.encrypt!(key.split(".").first)
-          set_value(secrets, key, value) unless value.nil?
+          unless value.nil?
+            access_key(secrets, key, write: true) do |parent, child|
+              parent[child] = value
+            end
+          end
         when :decrypt
           secrets.decrypt!(key.split(".").first)
-          set_value(secrets, key, value) unless value.nil?
+          unless value.nil?
+            access_key(secrets, key, write: true) do |parent, child|
+              parent[child] = value
+            end
+          end
         when :remove
-          secrets.delete(key)
+          access_key(secrets, key) do |parent, child|
+            if parent.is_a?(Array)
+              parent.delete_at(child)
+            else
+              parent.delete(child)
+            end
+          end
         end
       end
 
       super
-    end
-
-    private
-
-    # Set a nested value
-    def set_value(hash, key, value)
-      k, rest = key.split(".", 2)
-      if rest
-        h = hash[k]
-        unless h.is_a?(Hash)
-          h = {}
-          hash[k] = h
-        end
-        set_value(h, rest, value)
-      else
-        hash[k] = value
-      end
     end
   end
 end
