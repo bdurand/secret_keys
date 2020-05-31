@@ -9,13 +9,20 @@ module SecretKeys::CLI
   class Base
     attr_reader :secrets, :secret_key, :input
 
+    NO_ADDITIONAL_OPTIONS = :no_added_options
+    MAX_SUMMARY_LENGTH = 80
+
     def initialize(argv)
+      # make sure we can only use stdin once
+      @stdin_used = false
       parse_options(argv)
+      p @input
       @secrets = SecretKeys.new(@input, @secret_key)
     end
 
     # Subclasses can override this method to parse additional options beyond the standard set.
     def parse_additional_options(opts)
+      NO_ADDITIONAL_OPTIONS
     end
 
     # Subclasses should return the action name for the help banner
@@ -52,42 +59,71 @@ module SecretKeys::CLI
       OptionParser.new do |opts|
         opts.banner = "Usage: secret_keys #{action_name} [options] [--] [INFILE|-]"
 
-        opts.on("--help", "Prints this help") do
-          puts opts.help
-          exit
-        end
-
-        opts.on("-s", "--secret-key ENCRYPTION_KEY", String, "Encryption key used to encrypt strings in the file. This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying -.") do |value|
+        secret_docs = split(<<~HELP)
+        Encryption key used to encrypt strings in the file.
+        This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable or via STDIN by specifying '-'.
+        HELP
+        opts.on("-s", "--secret-key=SECRET", String, *secret_docs) do |value|
           @secret_key = get_secret_key(value)
         end
 
-        opts.on("--secret-key-file ENCRYPTION_KEY_FILE_PATH", String, "Path to a file that contains the encryption key. This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.") do |value|
+        secret_file_docs = split(<<~HELP)
+        Path to a file that contains the encryption key.
+        This value can also be passed in the SECRET_KEYS_ENCRYPTION_KEY environment variable.
+        HELP
+        opts.on("--secret-key-file=PATH", String, *secret_file_docs) do |value|
           @secret_key = File.read(value).chomp
         end
 
-        opts.on("-f", "--format [FORMAT]", [:json, :yaml, :auto], "Set the output format. By default this will be the same as the input format.") do |value|
+        opts.on("-f", "--format FORMAT", [:json, :yaml], "Set the output format. By default this will be the same as the input format.") do |value|
           @format = value
         end
 
-        parse_additional_options(opts)
+        opts.separator("")
+
+        added_options = parse_additional_options(opts)
+
+        opts.separator("") unless added_options == NO_ADDITIONAL_OPTIONS
+
+        opts.on_tail("--help", "Prints this help") do
+          puts opts.help
+          exit
+        end
       end.order!(argv)
 
       @input = argv.shift
-      @input = $stdin if @input.nil? || @input == "-"
+      if @input.nil? || @input == "-"
+        can_i_haz_stdin!
+        @input = $stdin
+      end
 
       raise ArgumentError.new("Too many arguments") unless argv.empty?
     end
 
     def get_secret_key(value)
       if value == "-"
+        can_i_haz_stdin!
         if $stdin.tty?
           $stdin.getpass("Secret key: ")
         else
-          $stdin.gets
+          $stdin.gets.chomp
         end
       else
         value
       end
+    end
+
+    # @return [Array] array of strings from docstring, split at length
+    def split(docstring, length: MAX_SUMMARY_LENGTH)
+      docstring = docstring.strip
+      docstring.gsub!(/\s+/, ' ')
+      docstring.scan(/(.{1,#{length}})(?:\s+|\z)/).flatten
+    end
+
+    # Mark that you want to use stdin and raise an exception if it's already been used.
+    def can_i_haz_stdin!
+      raise ArgumentError, "stdin (-) cannot be specified multiple times" if @stdin_used
+      @stdin_used = true
     end
   end
 
@@ -98,8 +134,11 @@ module SecretKeys::CLI
 
     def parse_additional_options(opts)
       @new_secret_key = nil
-      opts.on("--new-secret-key ENCRYPTION_KEY", String, "Encryption key used to encrypt strings in the file on output. This option can be used to change the encryption key.") do |value|
-        @new_secret_key = value
+      opts.on("--new-secret-key=NEW_SECRET", String, *split(<<~DOC)) do |value|
+        Encryption key used to encrypt strings in the file on output.
+        This option can be used to change the encryption key. If set to '-', read from STDIN.
+        DOC
+        @new_secret_key = get_secret_key(value)
       end
 
       @in_place = false
