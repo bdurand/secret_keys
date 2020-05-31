@@ -1,5 +1,9 @@
 # frozen_string_literal: true
 
+require "securerandom"
+require "openssl"
+require "base64"
+
 # Logic handling encryption and description using encryption key derived from the secret key.
 class SecretKeys::Encryptor
   # format: <nonce:12>, <auth_tag:16>, <data:*>
@@ -9,26 +13,56 @@ class SecretKeys::Encryptor
   KDF_ITERATIONS = 20_000
   HASH_FUNC = "sha256"
   KEY_LENGTH = 32
+  # Valid salts are hexencoded strings
+  SALT_MATCHER = /\A(\h\h)+\z/.freeze
 
-  # @param [String] secret password used to encrypt the data
-  # @param [String] random salt used in encryption
-  def initialize(password, salt)
-    # Convert the salt to raw byte string
-    salt_bytes = [salt].pack("H*")
-    @derived_key = nil
-    if password && !password.empty?
-      @derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
+  class << self
+    # @param [String] password secret used to encrypt the data
+    # @param [String] salt random hex-encoded salt for key derivation
+    # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
+    def from_password(password, salt)
+      raise ArgumentError, "Password must be present" if password.nil? || password.empty?
+      raise ArgumentError, "Salt must be a hex encoded value" if salt.nil? || !SALT_MATCHER.match?(salt)
+      # Convert the salt to raw byte string
+      salt_bytes = [salt].pack("H*")
+      derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
+
+      new(derived_key)
     end
+
+    def encrypted?(value)
+      value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX)
+    end
+
+    # Derive a key of given length from a password and salt value.
+    def derive_key(password, salt:, length:)
+      if defined?(OpenSSL::KDF)
+        OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+      else
+        OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
+      end
+    end
+
+    # @return [String] hex encoded random bytes
+    def random_salt
+      SecureRandom.hex(8)
+    end
+  end
+
+  # @param [String] raw_key the key directly passed into the encrypt/decrypt functions. This must be exactly {KEY_LENGTH} bytes long.
+  def initialize(raw_key)
+    raise ArgumentError, "key must be #{KEY_LENGTH} bytes long" unless raw_key.bytesize == KEY_LENGTH
+    @derived_key = raw_key
   end
 
   # Encrypt a string with the encryption key. Encrypted values are also salted so
   # calling this function multiple times will result in different values. Only strings
-  # can be encrypted. Any other object type will be returned the value passed in.
+  # can be encrypted. Any other object type will be return the value passed in.
   #
   # @param [String] str string to encrypt (assumes UTF-8)
   # @return [String] Base64 encoded encrypted string with all aes parameters
   def encrypt(str)
-    return str unless str.is_a?(String) && @derived_key
+    return str unless str.is_a?(String)
     return "" if str == ""
 
     cipher = OpenSSL::Cipher.new(CIPHER).encrypt
@@ -56,11 +90,11 @@ class SecretKeys::Encryptor
   # Decrypt a string with the encryption key. If the value is not a string or it was
   # not encrypted with the encryption key, the value itself will be returned.
   #
-  # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from `.encrypt`)
+  # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from {#encrypt})
   # @return [String] decrypted string value
+  # @raise [OpenSSL::Cipher::CipherError] there is something wrong with the encoded data (usually incorrect key)
   def decrypt(encrypted_str)
-    return encrypted_str unless encrypted_str.is_a?(String) && @derived_key
-    return encrypted_str unless encrypted_str.start_with?(ENCRYPTED_PREFIX)
+    return encrypted_str unless encrypted?(encrypted_str)
 
     decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
     params = decode_aes(decrypt_str)
@@ -76,6 +110,10 @@ class SecretKeys::Encryptor
 
     # force to utf-8 encoding. We already ensured this when we encoded in the first place
     decoded_str.force_encoding(Encoding::UTF_8)
+  end
+
+  def encrypted?(value)
+    self.class.encrypted?(value)
   end
 
   private
@@ -98,14 +136,5 @@ class SecretKeys::Encryptor
     # Splat the data array apart
     # nonce, auth_tag, encrypted_data = unpacked_data
     CipherParams.new(*unpacked_data)
-  end
-
-  # Derive a key of given length from a password and salt value.
-  def derive_key(password, salt:, length:)
-    if defined?(OpenSSL::KDF)
-      OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
-    else
-      OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
-    end
   end
 end
