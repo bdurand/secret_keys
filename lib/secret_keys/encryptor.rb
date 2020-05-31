@@ -20,6 +20,8 @@ class SecretKeys::Encryptor
   SALT_MATCHER = /\A(\h\h)+\z/.freeze
 
   class << self
+    # Create an Encryptor from a password and salt. This is a shortcut for generating an Encryptor
+    # with a 32 byte encryption key. The key will be derived from the password and salt.
     # @param [String] password secret used to encrypt the data
     # @param [String] salt random hex-encoded byte array for key derivation
     # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
@@ -50,7 +52,7 @@ class SecretKeys::Encryptor
 
     # @return [String] hex encoded random bytes
     def random_salt
-      SecureRandom.hex(8)
+      SecureRandom.hex(16)
     end
   end
 

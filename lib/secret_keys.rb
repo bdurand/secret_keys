@@ -30,8 +30,7 @@ class SecretKeys < DelegateClass(Hash)
     update_secret(key: encryption_key)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
-    # if no salt exists, create one.
-    update_secret(salt: Encryptor.random_salt) if @salt.nil?
+
     super(@values)
   end
 
@@ -161,7 +160,7 @@ class SecretKeys < DelegateClass(Hash)
     @values = {}
     @original_encrypted = {}
 
-    hash = nil
+    hash = {}
     if path_or_stream.is_a?(Hash)
       # HACK: Perform a marshal dump/load operation to get a deep copy of the hash.
       #       Otherwise, we can end up using destructive `#delete` operations and mess
@@ -172,13 +171,14 @@ class SecretKeys < DelegateClass(Hash)
       hash = parse_data(data)
     end
 
-    return if hash.nil? || hash.empty?
-
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
+      raise EncryptionKeyError.new("Encryption key not specified") if @encryption_key.nil? || @encryption_key.empty?
+
       @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
-      update_secret(salt: encrypted_values.delete(SALT))
+      salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
+      update_secret(salt: salt)
 
       # Check that we are using the right key
       if file_key && !encryption_key_matches?(file_key)
@@ -186,6 +186,9 @@ class SecretKeys < DelegateClass(Hash)
       end
       @secret_keys = encrypted_values.keys
       hash.merge!(decrypt_values(encrypted_values))
+    elsif @salt.nil?
+      # if no salt exists, create one.
+      update_secret(salt: Encryptor.random_salt)
     end
 
     @values = hash

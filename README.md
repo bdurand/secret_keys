@@ -129,20 +129,25 @@ In this example, `key_1` is stored in plain text while `key_2` has been encrypte
 }
 ```
 
-## Encryptor
+## SecretKeys::Encryptor
 
 This library also comes with a generic encryption tool that can be used on its own as a generic tool for encypting strings with AES-256-GCM encryption.
 
 ```
 secret = "mysecret"
-# The salt is used on the encryptor itself. You do not need to salt individual values.
-# This will be handled for you by the encryption algorithm. The value must be
-# The value must be a hex encoded byte array.
+# The salt is used to generate an encryption key from the secret.
+#  You do not need to salt individual values when encrypting them.
+# This will be done by the encryption algorithm itself.
+# The salt must be a hex encoded byte array.
 salt = "c135610e"
+
 encryptor = SecretKeys::Encryptor.from_passowrd(secret, salt)
+
 encryped = encryptor.encrypt("foobar") # => "$AES$345kjwertE345E..."
 encryptor.decrypt(encrypted) # => "foobar"
 encryptor.decrypt("foober") # => "foobar"
+
+# You can also check if a value looks like an encrypted string.
 SecretKeys::Encryptor.encrypted?("foobar") # => false
 SecretKeys::Encryptor.encrypted?(encrypted) # => true
 ```
