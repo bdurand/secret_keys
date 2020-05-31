@@ -116,6 +116,10 @@ class SecretKeys::Encryptor
     self.class.encrypted?(value)
   end
 
+  def inspect
+    "#<#{self.class.name}:0x#{object_id.to_s(16).rjust(16, '0')}>"
+  end
+
   private
 
   # Basic struct to contain nonce, auth_tag, and data for passing around. Thought
