@@ -39,6 +39,10 @@ describe SecretKeys::Encryptor do
     end
 
     it "should raise an error if salt is invalid" do
+      expect { SecretKeys::Encryptor.from_password(password, "1023ef1f") }.to_not raise_error(ArgumentError)
+      expect { SecretKeys::Encryptor.from_password(password, "1023EF1F") }.to_not raise_error(ArgumentError)
+      expect { SecretKeys::Encryptor.from_password(password, "23ef1f") }.to_not raise_error(ArgumentError)
+      expect { SecretKeys::Encryptor.from_password(password, 123344) }.to_not raise_error(ArgumentError)
       expect { SecretKeys::Encryptor.from_password(password, nil) }.to raise_error(ArgumentError)
       expect { SecretKeys::Encryptor.from_password(password, "") }.to raise_error(ArgumentError)
       expect { SecretKeys::Encryptor.from_password(password, "d") }.to raise_error(ArgumentError)
@@ -56,12 +60,8 @@ describe SecretKeys::Encryptor do
     it "should determine if a value is encrypted" do
       encryptor = SecretKeys::Encryptor.from_password("key", "00000000")
       encrypted_value = encryptor.encrypt("foobar")
-
       expect(SecretKeys::Encryptor.encrypted?(encrypted_value)).to eq true
       expect(SecretKeys::Encryptor.encrypted?("foobar")).to eq false
-
-      expect(encryptor.encrypted?(encrypted_value)).to eq true
-      expect(encryptor.encrypted?("foobar")).to eq false
     end
   end
 end

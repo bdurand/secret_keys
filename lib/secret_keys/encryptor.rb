@@ -4,7 +4,9 @@ require "securerandom"
 require "openssl"
 require "base64"
 
-# Logic handling encryption and description using encryption key derived from the secret key.
+# Encyption helper for encrypting and decrypting values using AES-256-GCM and returning
+# as Base64 encoded strings. The encrypted values also include a prefix that can be used
+# to detect if a string is an encrypted value.
 class SecretKeys::Encryptor
   # format: <nonce:12>, <auth_tag:16>, <data:*>
   ENCODING_FORMAT = "a12 a16 a*"
@@ -14,27 +16,31 @@ class SecretKeys::Encryptor
   HASH_FUNC = "sha256"
   KEY_LENGTH = 32
   # Valid salts are hexencoded strings
-  SALT_MATCHER = /\A(\h\h)+\z/.freeze
+  SALT_MATCHER = /\A(\h\h)+\z/i.freeze
 
   class << self
+    # Create an instance from a secret and salt.
     # @param [String] password secret used to encrypt the data
-    # @param [String] salt random hex-encoded salt for key derivation
+    # @param [String, Integer] salt random hex-encoded salt for key derivation
     # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
     def from_password(password, salt)
       raise ArgumentError, "Password must be present" if password.nil? || password.empty?
-      raise ArgumentError, "Salt must be a hex encoded value" if salt.nil? || !SALT_MATCHER.match?(salt)
+      salt = "0#{salt}" if salt.is_a?(String) && salt.size.odd? && salt.size > 1
+      raise ArgumentError, "Salt must be a hex encoded value" unless salt && (salt.is_a?(Integer) || SALT_MATCHER.match?(salt))
       # Convert the salt to raw byte string
-      salt_bytes = [salt].pack("H*")
+      salt = salt.to_i.to_s(16) if salt.is_a?(Integer)
+      salt_bytes = [salt.downcase].pack("H*")
       derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
 
       new(derived_key)
     end
 
+    # Detect of the value is a string that was encrypted by this library.
     def encrypted?(value)
-      value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX)
+      value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX) && value.size > ENCRYPTED_PREFIX.size
     end
 
-    # Derive a key of given length from a password and salt value.
+    # Derive a  key of given length from a password and salt value.
     def derive_key(password, salt:, length:)
       if defined?(OpenSSL::KDF)
         OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
@@ -94,7 +100,7 @@ class SecretKeys::Encryptor
   # @return [String] decrypted string value
   # @raise [OpenSSL::Cipher::CipherError] there is something wrong with the encoded data (usually incorrect key)
   def decrypt(encrypted_str)
-    return encrypted_str unless encrypted?(encrypted_str)
+    return encrypted_str unless self.class.encrypted?(encrypted_str)
 
     decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
     params = decode_aes(decrypt_str)
@@ -112,12 +118,8 @@ class SecretKeys::Encryptor
     decoded_str.force_encoding(Encoding::UTF_8)
   end
 
-  def encrypted?(value)
-    self.class.encrypted?(value)
-  end
-
   def inspect
-    "#<#{self.class.name}:0x#{object_id.to_s(16).rjust(16, '0')}>"
+    "#<#{self.class.name}:0x#{object_id.to_s(16).rjust(16, "0")}>"
   end
 
   private
