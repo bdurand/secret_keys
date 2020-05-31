@@ -30,6 +30,10 @@ class SecretKeys::Encryptor
       new(derived_key)
     end
 
+    def encrypted?(value)
+      value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX)
+    end
+
     # Derive a key of given length from a password and salt value.
     def derive_key(password, salt:, length:)
       if defined?(OpenSSL::KDF)
@@ -108,8 +112,8 @@ class SecretKeys::Encryptor
     decoded_str.force_encoding(Encoding::UTF_8)
   end
 
-  def encrypted?(str)
-    str.is_a?(String) && str.start_with?(ENCRYPTED_PREFIX)
+  def encrypted?(value)
+    self.class.encrypted?(value)
   end
 
   private
