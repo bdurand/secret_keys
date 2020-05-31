@@ -56,12 +56,8 @@ describe SecretKeys::Encryptor do
     it "should determine if a value is encrypted" do
       encryptor = SecretKeys::Encryptor.from_password("key", "00000000")
       encrypted_value = encryptor.encrypt("foobar")
-
       expect(SecretKeys::Encryptor.encrypted?(encrypted_value)).to eq true
       expect(SecretKeys::Encryptor.encrypted?("foobar")).to eq false
-
-      expect(encryptor.encrypted?(encrypted_value)).to eq true
-      expect(encryptor.encrypted?("foobar")).to eq false
     end
   end
 end

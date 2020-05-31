@@ -4,7 +4,9 @@ require "securerandom"
 require "openssl"
 require "base64"
 
-# Logic handling encryption and description using encryption key derived from the secret key.
+# Encyption helper for encrypting and decrypting values using AES-256-GCM and returning
+# as Base64 encoded strings. The encrypted values also include a prefix that can be used
+# to detect if a string is an encrypted value.
 class SecretKeys::Encryptor
   # format: <nonce:12>, <auth_tag:16>, <data:*>
   ENCODING_FORMAT = "a12 a16 a*"
@@ -13,33 +15,36 @@ class SecretKeys::Encryptor
   KDF_ITERATIONS = 20_000
   HASH_FUNC = "sha256"
   KEY_LENGTH = 32
+
   # Valid salts are hexencoded strings
   SALT_MATCHER = /\A(\h\h)+\z/.freeze
 
   class << self
     # @param [String] password secret used to encrypt the data
-    # @param [String] salt random hex-encoded salt for key derivation
+    # @param [String] salt random hex-encoded byte array for key derivation
     # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
     def from_password(password, salt)
       raise ArgumentError, "Password must be present" if password.nil? || password.empty?
       raise ArgumentError, "Salt must be a hex encoded value" if salt.nil? || !SALT_MATCHER.match?(salt)
       # Convert the salt to raw byte string
       salt_bytes = [salt].pack("H*")
-      derived_key = derive_key(password, salt: salt_bytes, length: KEY_LENGTH)
+      derived_key = derive_key(password, salt: salt_bytes)
 
       new(derived_key)
     end
 
+    # Detect of the value is a string that was encrypted by this library.
     def encrypted?(value)
       value.is_a?(String) && value.start_with?(ENCRYPTED_PREFIX)
     end
 
     # Derive a key of given length from a password and salt value.
-    def derive_key(password, salt:, length:)
+    def derive_key(password, salt:, length: KEY_LENGTH, iterations: KDF_ITERATIONS, hash: HASH_FUNC)
       if defined?(OpenSSL::KDF)
-        OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: KDF_ITERATIONS, length: length, hash: HASH_FUNC)
+        OpenSSL::KDF.pbkdf2_hmac(password, salt: salt, iterations: iterations, length: length, hash: hash)
       else
-        OpenSSL::PKCS5.pbkdf2_hmac(password, salt, KDF_ITERATIONS, length, HASH_FUNC)
+        # Ruby 2.4 compatibility
+        OpenSSL::PKCS5.pbkdf2_hmac(password, salt, iterations, length, hash)
       end
     end
 
@@ -94,7 +99,7 @@ class SecretKeys::Encryptor
   # @return [String] decrypted string value
   # @raise [OpenSSL::Cipher::CipherError] there is something wrong with the encoded data (usually incorrect key)
   def decrypt(encrypted_str)
-    return encrypted_str unless encrypted?(encrypted_str)
+    return encrypted_str unless self.class.encrypted?(encrypted_str)
 
     decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
     params = decode_aes(decrypt_str)
@@ -117,7 +122,8 @@ class SecretKeys::Encryptor
   end
 
   def inspect
-    "#<#{self.class.name}:0x#{object_id.to_s(16).rjust(16, '0')}>"
+    obj_id = object_id.to_s(16).rjust(16, "0")
+    "#<#{self.class.name}:0x#{obj_id}>"
   end
 
   private
