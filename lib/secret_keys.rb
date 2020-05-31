@@ -136,6 +136,13 @@ class SecretKeys < DelegateClass(Hash)
     update_secret(key: new_encryption_key)
   end
 
+  # Return the data format (:json or :yaml) for the original data. Defaults to :json.
+  #
+  # @return [String]
+  def input_format
+    @format
+  end
+
   private
 
   ENCRYPTED = ".encrypted"
@@ -189,6 +196,7 @@ class SecretKeys < DelegateClass(Hash)
   # @return [Hash] data parsed to a hash
   def parse_data(data)
     @format = :json
+    return {} if data.nil? || data.empty?
     JSON.parse(data)
   rescue JSON::JSONError
     @format = :yaml
@@ -299,6 +307,7 @@ class SecretKeys < DelegateClass(Hash)
     if !@encryption_key.nil? && !@salt.nil?
       @encryptor = Encryptor.from_password(@encryption_key, @salt)
     end
+
     # Don't accidentally return the secret, dammit
     nil
   end
@@ -310,11 +319,12 @@ class SecretKeys < DelegateClass(Hash)
   # @return [String, nil] the encryption key
   def read_encryption_key(encryption_key)
     return encryption_key if encryption_key && !encryption_key.empty?
+
     encryption_key = ENV["SECRET_KEYS_ENCRYPTION_KEY"]
     return encryption_key if encryption_key && !encryption_key.empty?
-    encryption_key_file = ENV["SECRET_KEYS_ENCRYPTION_KEY_FILE"]
 
     encryption_key = nil
+    encryption_key_file = ENV["SECRET_KEYS_ENCRYPTION_KEY_FILE"]
     if encryption_key_file && !encryption_key_file.empty? && File.exist?(encryption_key_file)
       encryption_key = File.read(encryption_key_file).chomp
     end
