@@ -3,11 +3,9 @@
 require "openssl"
 require "json"
 require "yaml"
-require "securerandom"
 require "delegate"
 require "set"
 require "pathname"
-require "base64"
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretKeys < DelegateClass(Hash)
@@ -33,7 +31,7 @@ class SecretKeys < DelegateClass(Hash)
     path_or_stream = Pathname.new(path_or_stream) if path_or_stream.is_a?(String)
     load_secrets!(path_or_stream)
     # if no salt exists, create one.
-    update_secret(salt: SecureRandom.hex(8)) if @salt.nil?
+    update_secret(salt: Encryptor.random_salt) if @salt.nil?
     super(@values)
   end
 
@@ -290,8 +288,8 @@ class SecretKeys < DelegateClass(Hash)
 
   # Update the secret key by updating the salt
   #
-  # @param key: new encryption key
-  # @param salt: salt to use for secret
+  # @param key new encryption key
+  # @param salt salt to use for secret
   # @return [void]
   def update_secret(key: nil, salt: nil)
     @encryption_key = key unless key.nil? || key.empty?
@@ -299,7 +297,7 @@ class SecretKeys < DelegateClass(Hash)
 
     # Only update the secret if encryption key and salt are present
     if !@encryption_key.nil? && !@salt.nil?
-      @encryptor = Encryptor.new(@encryption_key, @salt)
+      @encryptor = Encryptor.from_password(@encryption_key, @salt)
     end
     # Don't accidentally return the secret, dammit
     nil
