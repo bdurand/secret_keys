@@ -1,3 +1,4 @@
+# frozen_string_literal: true
 
 class SecretKeys
   VERSION = File.read(File.join(__dir__, "..", "..", "VERSION")).freeze
