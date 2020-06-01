@@ -45,6 +45,9 @@ secrets.encrypt!("api_key")
 
 # now, when we save, the value for api_key is encrypted
 secrets.save("/path/to/file.json")
+
+# or get a Hash with the encrypted data to handle it yourself
+secrets.encrypted_hash
 ```
 
 Note that since the hash must be serialized to JSON, only JSON compatible keys and values (string, number, boolean, null, array, hash) can be used. The same holds for YAML.
