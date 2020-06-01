@@ -6,9 +6,9 @@
 
 This ruby gem handles encrypting values in a JSON or YAML file. It is yet another solution for storing secrets in a ruby project.
 
-The main advantage offered by this gem is that it stores the files in standard JSON format and it can easily store both encrypted and non-encrypted values side-by-side, so easily track all your configurations in one place. After providing your secret key, all values can be easily accessed regardless of whether they were encrypted or plaintext.
+The main advantage offered by this gem is that it stores the files in standard JSON or YAML format and can easily store both encrypted and non-encrypted values side-by-side, easily tracking all your configurations in one place. After providing your secret key, all values can be easily accessed regardless of whether they were encrypted or plaintext.
 
-Encrypted values are stored using aes-256-gcm, and the key is derived from your password secret and salt using PBKDF2. All security primitives are provided by openssl, based on recommendations put forth in the libsodium crypto suite.
+Encrypted values are stored using AES-256-GCM, and the key is derived from your password secret and salt using PBKDF2. All security primitives are provided by OpenSSL, based on recommendations put forth in the [libsodium](https://doc.libsodium.org/secret-key_cryptography/aead/aes-256-gcm) crypto suite.
 
 ## Usage
 
@@ -21,10 +21,12 @@ secrets = SecretKeys.new("/path/to/file.json", "mysecretkey")
 or a stream
 
 ```ruby
-secrets = SecretKeys.new(File.open("/path/to/file.json"), "mysecretkey")
+stream = File.open("/path/to/file.json")
+secrets = SecretKeys.new(stream, "mysecretkey")
+stream.close
 ```
 
-If you don't supply the encryption key in the constructor, by default it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable. If that value is not present, then it will attempted to be read from the file path in the `SECRET_KEYS_ENCRYPTION_KEY_FILE` environment variable. As a side note, the empty string (`""`) is not considered a valid secret, so encryption **will** fail if ther is no explicitly passed secret and no ENV variable.
+If you don't supply the encryption key in the constructor, by default it will be read from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable. If that value is not present, then it will attempt to be read from the file path in the `SECRET_KEYS_ENCRYPTION_KEY_FILE` environment variable. As a side note, the empty string `""` is not considered a valid secret, so encryption **will** fail if there is no explicitly passed secret and no `ENV` variables.
 
 The `SecretKeys` object delegates to `Hash` and can be treated as a hash for most purposes.
 
@@ -47,19 +49,24 @@ secrets.save("/path/to/file.json")
 
 Note that since the hash must be serialized to JSON, only JSON compatible keys and values (string, number, boolean, null, array, hash) can be used. The same holds for YAML.
 
-Only string values can be encrypted. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
+**Only string values are encrypted**. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
 
 ```json
 {
   ".encrypted": {
     "enc_key1": {
-      "num": 1,
-      "rec": ["<encrypted-val>", true],
+      "num": 1, // primitives are not encrypted
+      "null_value": null, // null is not encrypted
+      "rec": [
+        "<encrypted-val>", // we recurse through the array to encrypt its strings
+        true // booleans aren't encrypted either
+      ],
       "thing": "<encrypted-val>"
     },
     "enc_key2": "<encrypted-val>"
   },
-  "unenc_key": "plaintext"
+  "unenc_key": "plaintext",
+  "other_plaintext": "See, you can read my contents!"
 }
 ```
 
@@ -70,47 +77,77 @@ You can use the `secret_keys` command line tool to manage your JSON files.
 You can initialize a new file with the encrypt command.
 
 ```bash
-secret_keys encrypt --key mysecret /path/to/file.json
+secret_keys encrypt --secret=mysecret /path/to/file.json
 ```
 
-If you don't specify the `--key` argument, the encryption key will either be read from the STDIN stream or from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable.
-
-You can then use your favorite text editor to edit the values in the JSON file. When you are done, you can run the same command again to encrypt the file.
-
-You can add or modify keys through the command line as well.
+If you don't specify the `--secret` argument, the secret can either be read from the STDIN stream or from the `SECRET_KEYS_ENCRYPTION_KEY` environment variable.
 
 ```bash
-# add an encrypted key
-secret_keys encrypt --key mysecret --set password /path/to/file.json
+# reading from stdin
+$ secret_keys encrypt --secret=- data.json
+Secret Key: <hidden password input>
+
+# or you can pipe in the contents
+$ echo "my_secret" | secret_keys encrypt --secret=- data.json
+```
+
+You can then use your favorite text editor to edit the values in the JSON file and putting any keys you want encrypted in the `".encrypted"` section. When you are done, you can run the same command again to encrypt all new keys in the file. The default behaviour is to output the file to STDOUT, or you can rewrite the file in place by passing `--in-place`.
+
+Finally, calling encrypt with `--encrypt-all` will just encrypt all keys in a file.
+
+```bash
+secret_keys encrypt -s mysecret --encrypt-all --in-place data.json
+```
+
+You can also add or modify keys through the command line as well using `--set-encrypted` or `-e` for short. You can also use "dot syntax" to address nested keys, for example `aws.client_secret` addresses `{"aws":{"client_secret": <value>}}`
+
+```bash
+# mark individual keys for encryption
+secret_keys edit -s mysecret --set-encrypted password -e other_password /path/to/file.json
 
 # add an encrypted key with a value
-secret_keys encrypt --key mysecret --set password=value /path/to/file.json
+secret_keys edit -s mysecret --set-encrypted password=value /path/to/file.json
 
-# encrypt all keys in the file
-secret_keys encrypt --key mysecret --all /path/to/file.json
+# edit nested keys (assumes hashes by default)
+# nested keys are split on `.` dots
+secret_keys edit -s mysecret -e aws.secret=password data.json
+# {
+#   ".encrypted": {
+#     "aws": {
+#       "secret": "<encrypted-value>"
+#     }
+#   }
+# }
 ```
 
-You can also decrypt or delete keys.
+You can also decrypt (`--set-decrypted` or `-d`) or remove keys (`--remove` or `-r`).
 
 ```bash
-secret_keys encrypt --key mysecret --decrypt username --delete password /path/to/file.json
+secret_keys edit -s mysecret --set-decrypted username --remove password /path/to/file.json
 ```
 
 You can change the encryption key used in the file.
 
 ```bash
-secret_keys encrypt --key mysecret --new-key newsecret /path/to/file.json
+secret_keys encrypt -s mysecret --new-secret-key newsecret /path/to/file.json
 ```
 
 Finally, you can print the unencrypted file to STDOUT.
 
 ```bash
-secret_keys decrypt --key mysecret /path/to/file.json
+# print the decrypted file to stdout
+secret_keys decrypt --secret mysecret /path/to/file.json
+
+# Explicitly output as JSON
+secret_keys decrypt --secret mysecret --format json /path/to/file.json
+
+# Output the data as YAML
+secret_keys decrypt --secret mysecret --format yaml /path/to/file.json
 ```
 
 ## File Format
 
-The data can be stored in a plain old JSON file. Any unencrypted keys will appear under in the special `".encrypted"` key in the hash. The encryption key itself is also stored in the `".key"` key along with the encrypted values. This is used to confirm that the correct key is being used when decrypting the file.
+The data can be stored in a plain old JSON or YAML file. Any unencrypted keys will appear under the special `".encrypted"` key in the hash. A check value (to validate you are using the correct encryption key) is stored under `".key"`. This is used to confirm that the correct key is being used when decrypting the file. Finally, there is also the `".salt"` which was used for key derivation.
 
 In this example, `not_encrypted` is stored in plain text while `foo` has been encrypted.
 
@@ -143,11 +180,23 @@ salt = "deadbeef"
 
 encryptor = SecretKeys::Encryptor.from_passowrd(secret, salt)
 
-encryped = encryptor.encrypt("foobar") # => "$AES$345kjwertE345E..."
+encryped = encryptor.encrypt("foobar") # => "$AES$:345kjwertE345E..."
 encryptor.decrypt(encrypted) # => "foobar"
 encryptor.decrypt("foobar") # => "foobar"
+
+# If the data is corrupted/tampered with, decryption will raise an error.
+# This can also be caused by using the wrong key.
+begin
+  encryptor.decrypt("$AES$:malformed/corrupted data")
+rescue OpenSSL::Cipher::CipherError
+  puts "Bad data/encryption key"
+end
 
 # You can also check if a value looks like an encrypted string.
 SecretKeys::Encryptor.encrypted?("foobar") # => false
 SecretKeys::Encryptor.encrypted?(encrypted) # => true
 ```
+
+## Verioning
+
+This code aims to be compliant with [Semantic Verioning 2.0](https://semver.org/). If there is ever a need to change file encryption parameters, those changes will be released as a new major version. Just to be clear, we do not anticipate needing to change these parameters.
