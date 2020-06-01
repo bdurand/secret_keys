@@ -5,6 +5,7 @@ require_relative "spec_helper"
 describe SecretKeys do
   let(:decrypted_file_path) { File.join(__dir__, "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "fixtures", "encrypted.json") }
+  let(:future_file_path) { File.join(__dir__, "fixtures", "future_file_version.json") }
   let(:decrypted_values) { JSON.parse(File.read(decrypted_file_path)) }
 
   describe "class" do
@@ -218,6 +219,12 @@ describe SecretKeys do
         secrets = SecretKeys.new(encrypted_file_path)
         expect(secrets.to_h).to eq decrypted_values
       end
+    end
+  end
+
+  describe "versioning" do
+    it "should fail when reading a file generated with a newer version" do
+      expect { SecretKeys.new(future_file_path, "SECRET_KEY") }.to raise_error(SecretKeys::VersionError)
     end
   end
 end

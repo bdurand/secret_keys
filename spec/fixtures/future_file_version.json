@@ -1,0 +1,10 @@
+{
+  ".encrypted": {
+    ".version": 1000000,
+    ".key": "totally different spec",
+    ".salt": "We changed everything",
+    ".kdf": "ARGON2",
+    "my_key": "$ChaCha20$:QUANTUM_PROTECT",
+    "old_style": "$AES$:fjdkslfjdsjklfhdsjkfhdjks"
+  }
+}

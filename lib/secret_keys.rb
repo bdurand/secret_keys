@@ -180,11 +180,12 @@ class SecretKeys < DelegateClass(Hash)
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
       @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
+
+      version = encrypted_values.delete(VERSION_KEY) || CRYPTO_VERSION
+      raise VersionError, "Unsupported file version #{version}. Max supported is #{CRYPTO_VERSION}." if version > CRYPTO_VERSION
+
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
       salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
-      version = encrypted_values.delete(VERSION_KEY) { CRYPTO_VERSION }
-
-      raise VersionError, "Unsupported file version #{version}. Max supported it #{CRYPTO_VERSION}" if version > CRYPTO_VERSION
       update_secret(salt: salt)
 
       # Check that we are using the right key
