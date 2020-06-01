@@ -49,7 +49,7 @@ secrets.save("/path/to/file.json")
 
 Note that since the hash must be serialized to JSON, only JSON compatible keys and values (string, number, boolean, null, array, hash) can be used. The same holds for YAML.
 
-**Only string values are encrypted**. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
+**Only string values are encrypted**. The encryption is recursive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
 
 ```javascript
 {
@@ -168,7 +168,7 @@ In this example, `not_encrypted` is stored in plain text while `foo` has been en
 
 ## SecretKeys::Encryptor
 
-This library also comes with a generic encryption tool that can be used on its own as a generic tool for encypting strings with AES-256-GCM encryption.
+This library also comes with a generic encryption tool that can be used on its own as a generic tool for encrypting strings with AES-256-GCM encryption.
 
 ```ruby
 secret = "mysecret"
@@ -180,7 +180,7 @@ salt = "deadbeef"
 
 encryptor = SecretKeys::Encryptor.from_passowrd(secret, salt)
 
-encryped = encryptor.encrypt("foobar") # => "$AES$:345kjwertE345E..."
+encrypted = encryptor.encrypt("foobar") # => "$AES$:345kjwertE345E..."
 encryptor.decrypt(encrypted) # => "foobar"
 encryptor.decrypt("foobar") # => "foobar"
 
@@ -197,6 +197,6 @@ SecretKeys::Encryptor.encrypted?("foobar") # => false
 SecretKeys::Encryptor.encrypted?(encrypted) # => true
 ```
 
-## Verioning
+## Versioning
 
 This code aims to be compliant with [Semantic Verioning 2.0](https://semver.org/). If there is ever a need to change file encryption parameters, those changes will be released as a new major version. Just to be clear, we do not anticipate needing to change these parameters.
