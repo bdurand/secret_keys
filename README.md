@@ -73,6 +73,8 @@ Note that since the hash must be serialized to JSON, only JSON compatible keys a
 }
 ```
 
+This gem is documented using yard. More specific documentation can be found on [rubydoc.info](https://www.rubydoc.info/gems/secret_keys).
+
 ## Command Line Tool
 
 You can use the `secret_keys` command line tool to manage your JSON files.
