@@ -9,7 +9,11 @@ require "pathname"
 
 # Load a JSON file with encrypted values. This value can be used as a hash.
 class SecretKeys < DelegateClass(Hash)
+  # Error if the provided encryption key is invalid for this file
   class EncryptionKeyError < ArgumentError; end
+
+  # Error if the crypto version specified in the file is unsupported
+  class VersionError < StandardError; end
 
   # Parse a JSON or YAML stream or file with encrypted values. Any values in the ".encrypted" key
   # in the document will be decrypted with the provided encryption key. If values
@@ -121,6 +125,7 @@ class SecretKeys < DelegateClass(Hash)
     encrypted.merge!(encrypt_values(encrypted, @original_encrypted))
     encrypted[SALT] = @salt
     encrypted[ENCRYPTION_KEY] = (@original_encrypted[ENCRYPTION_KEY] || encrypted_known_value)
+    encrypted[VERSION_KEY] = CRYPTO_VERSION
 
     hash[ENCRYPTED] = encrypted
     hash
@@ -146,6 +151,7 @@ class SecretKeys < DelegateClass(Hash)
 
   ENCRYPTED = ".encrypted"
   ENCRYPTION_KEY = ".key"
+  VERSION_KEY = ".version"
   SALT = ".salt"
 
   # Used as a known value for verifying we have the correct key
@@ -176,6 +182,9 @@ class SecretKeys < DelegateClass(Hash)
       @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
       salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
+      version = encrypted_values.delete(VERSION_KEY) { CRYPTO_VERSION }
+
+      raise VersionError, "Unsupported file version #{version}. Max supported it #{CRYPTO_VERSION}" if version > CRYPTO_VERSION
       update_secret(salt: salt)
 
       # Check that we are using the right key
@@ -337,4 +346,5 @@ class SecretKeys < DelegateClass(Hash)
   end
 end
 
+require_relative "secret_keys/version"
 require_relative "secret_keys/encryptor"
