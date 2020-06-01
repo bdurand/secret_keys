@@ -174,14 +174,25 @@ module SecretKeys::CLI
       end
 
       @in_place = false
-      opts.on("--in-place", "Update the input file instead of writing to stdout.") do |value|
+      opts.on("-i", "--in-place", "Update the input file instead of writing to stdout.") do |value|
         @in_place = true
+      end
+
+      @encrypt_all = false
+      opts.on("--encrypt-all", "Encrypt all keys in the file") do |value|
+        @encrypt_all = value
       end
     end
 
     def run!
       if @new_secret_key && !@new_secret_key.empty?
         secrets.encryption_key = @new_secret_key
+      end
+
+      if @encrypt_all
+        secrets.each_key do |key|
+          secrets.encrypt!(key)
+        end
       end
 
       if @in_place

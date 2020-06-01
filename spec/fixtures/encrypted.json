@@ -19,6 +19,7 @@
     },
     "plaintext": "not encrypted",
     ".salt": "4fdb453a5653144c5345abb92c7477fc",
-    ".key": "$AES$:3IklTG0pStknboISiaoUj1aUiphnKuxIzz5tDlWCqoPnlQsdM4E"
+    ".key": "$AES$:3IklTG0pStknboISiaoUj1aUiphnKuxIzz5tDlWCqoPnlQsdM4E",
+    ".version": 1
   }
 }
