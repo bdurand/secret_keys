@@ -51,7 +51,7 @@ Note that since the hash must be serialized to JSON, only JSON compatible keys a
 
 **Only string values are encrypted**. The encryption is recusive, so all strings in an array or hash in the encrypted keys will be encrypted. See the example below.
 
-```json
+```javascript
 {
   ".encrypted": {
     "enc_key1": {
