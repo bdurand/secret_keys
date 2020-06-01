@@ -7,3 +7,4 @@ format: progress
 ignore:
   - '**/*':
     - Standard/SemanticBlocks
+    - Style/StderrPuts
