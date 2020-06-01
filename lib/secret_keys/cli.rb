@@ -140,7 +140,7 @@ module SecretKeys::CLI
         if parent.is_a?(Array)
           k = curr.to_i
           raise ArgumentError, "Array index must be a positive number" if curr != k.to_s || k < 0
-        elsif parent.respond_to?(:[])
+        elsif parent.is_a?(Hash) || parent.is_a?(SecretKeys)
           k = curr
         else
           raise ArgumentError, "No such key: #{key.inspect}"
