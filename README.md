@@ -77,10 +77,30 @@ Note that since the hash must be serialized to JSON, only JSON compatible keys a
 
 You can use the `secret_keys` command line tool to manage your JSON files.
 
-You can initialize a new file with the encrypt command.
+```console
+$ secret_keys help
+Usage: secret_keys <command> ...
+
+Commands:
+    encrypt   Encrypt a file
+    decrypt   Decrypt a file
+    read      Read the value of one key in a file
+    edit      Change which values are encrypted, the file's encryption key, delete/add keys, etc.
+    init      Initialize an empty secrets file
+
+    help      Get help for a command
+```
+
+You can initialize a new file with the init command.
 
 ```bash
-secret_keys encrypt --secret=mysecret /path/to/file.json
+secret_keys init --secret=mysecret /path/to/new/file.json
+```
+
+Or add the encryption section to an existing file.
+
+```bash
+secret_keys encrypt --secret=mysecret --in-place /path/to/file.json
 ```
 
 You can also specify the path to a file where the secret is stored with `--secret-file`. If you don't specify the `--secret` or `--secret-file` argument, the secret will be read from the `SECRET_KEYS_ENCRYPTION_KEY` or `SECRET_KEYS_ENCRYPTION_KEY_FILE` environment variable.
@@ -106,23 +126,26 @@ secret_keys encrypt -s mysecret --encrypt-all --in-place data.json
 
 You can also add or modify keys through the command line using `--set-encrypted` or `-e` for short. You can also use "dot syntax" to address nested keys, for example `aws.client_secret` addresses `{"aws":{"client_secret": <value>}}`
 
-```bash
+```console
 # mark individual keys for encryption
-secret_keys edit -s mysecret --set-encrypted password -e other_password /path/to/file.json
+$ secret_keys edit -s mysecret --set-encrypted password -e other_password /path/to/file.json
+{ ... }
 
 # add an encrypted key with a value
-secret_keys edit -s mysecret --set-encrypted password=value /path/to/file.json
+$ secret_keys edit -s mysecret --set-encrypted password=value /path/to/file.json
+{ ... }
 
 # edit nested keys (assumes hashes by default)
 # nested keys are split on `.` dots
-secret_keys edit -s mysecret -e aws.secret=password data.json
-# {
-#   ".encrypted": {
-#     "aws": {
-#       "secret": "<encrypted-value>"
-#     }
-#   }
-# }
+$ secret_keys edit -s mysecret -e aws.secret=password data.json
+{
+  ".encrypted": {
+    "aws": {
+      "secret": "<encrypted-value>"
+    },
+    ...
+  }
+}
 ```
 
 You can also decrypt keys by moving them to the plain text section of the file (`--set-decrypted` or `-d`) or remove them altogether (`--remove` or `-r`).

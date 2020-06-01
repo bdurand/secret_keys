@@ -157,6 +157,27 @@ module SecretKeys::CLI
     end
   end
 
+  class Init < Base
+    def action_name
+      "init"
+    end
+
+    def run!
+      @secrets = SecretKeys.new({}, secret_key)
+      if input.is_a?(String)
+        if File.exist?(input)
+          STDERR.puts "Error: Cannot init preexisting file '#{input}'"
+          STDERR.puts "You may want to try calling `secret_keys encrypt/edit` instead"
+          exit 1
+        end
+
+        File.write(input, encrypted_file_contents)
+      else
+        $stdout.write(encrypted_file_contents)
+      end
+    end
+  end
+
   class Encrypt < Base
     def action_name
       "encrypt"
