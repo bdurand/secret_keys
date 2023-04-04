@@ -6,14 +6,6 @@ on:
     tags:
       - v*
   pull_request:
-name: Continuous Integration
-on:
-  push:
-    branches:
-      - master
-    tags:
-      - v*
-  pull_request:
 env:
   BUNDLE_CLEAN: "true"
   BUNDLE_PATH: vendor/bundle
