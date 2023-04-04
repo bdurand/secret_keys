@@ -44,7 +44,7 @@ class SecretKeys < DelegateClass(Hash)
   def to_h
     @values
   end
-  alias to_hash to_h
+  alias_method :to_hash, :to_h
 
   # Mark the key as being encrypted when the JSON is saved.
   #
@@ -94,11 +94,9 @@ class SecretKeys < DelegateClass(Hash)
     format ||= @format
     format = format.to_s.downcase
 
-    output = (format == "yaml" ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+    output = ((format == "yaml") ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
     output << $/ unless output.end_with?($/) # ensure file ends with system dependent new line
-    File.open(path, "w") do |file|
-      file.write(output)
-    end
+    File.write(path, output)
     nil
   end
 

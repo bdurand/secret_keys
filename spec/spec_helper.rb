@@ -1,4 +1,4 @@
-require_relative "../lib/secret_keys.rb"
+require_relative "../lib/secret_keys"
 
 require "tempfile"
 require "climate_control"
