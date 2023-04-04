@@ -1,10 +1,10 @@
-# I really just have issues with the automatic "semantic blocks"
-
 ruby_version: 2.4
 
 format: progress
 
 ignore:
-  - '**/*':
-    - Standard/SemanticBlocks
-    - Style/StderrPuts
+  - "**/*":
+      # Explicitly keep b/c these serve as documentation
+      - Style/IfWithBooleanLiteralBranches
+  - 'spec/**/*':
+    - Lint/UselessAssignment
