@@ -13,6 +13,14 @@ describe SecretKeys::Encryptor do
       expect(encryptor.decrypt(encrypted)).to eq "stuff"
     end
 
+    it "should encode data without linefeeds or padding" do
+      long_line = "Hello, world!" * 100
+      encrypted = encryptor.encrypt(long_line)
+      expect(encrypted).to_not include "="
+      expect(encrypted).to_not include "\n"
+      expect(encryptor.decrypt(encrypted)).to eq long_line
+    end
+
     it "should never encrypt a value the same way twice" do
       encrypted_1 = encryptor.encrypt("stuff")
       encrypted_2 = encryptor.encrypt("stuff")
