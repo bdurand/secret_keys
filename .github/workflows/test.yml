@@ -1,4 +1,3 @@
-# Test runner copied from R167/backblaze
 name: Run tests
 on:
   push:
@@ -7,37 +6,58 @@ on:
     tags:
       - v*
   pull_request:
+name: Continuous Integration
+on:
+  push:
+    branches:
+      - master
+    tags:
+      - v*
+  pull_request:
+env:
+  BUNDLE_CLEAN: "true"
+  BUNDLE_PATH: vendor/bundle
+  BUNDLE_JOBS: 3
+  BUNDLE_RETRY: 3
 jobs:
   specs:
-    name: ${{ matrix.job }} ruby-${{ matrix.ruby }} (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
+    name: ruby-${{ matrix.ruby }} ${{ matrix.appraisal }}
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest]
-        ruby: [2.4, 2.5, 2.6, 2.7, "3.0", 3.1, 3.2]
         include:
-          - os: ubuntu-latest
-            ruby: 2.7
-            job: standardrb
+          - ruby: "ruby"
+            standardrb: true
+          - ruby: "3.2"
+          - ruby: "3.1"
+          - ruby: "3.0"
+          - ruby: "2.7"
+          - ruby: "2.6"
+          - ruby: "2.5"
+          - ruby: "2.4"
     steps:
-      - uses: actions/checkout@v3
-      - uses: ruby/setup-ruby@v1
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Set up Ruby ${{ matrix.ruby }}
+        uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-          bundler-cache: true
-      # Okay, back to what we really care about...
-      # This is sort of a hack, but it's fine.
-      - name: specs
-        run: bundle exec rake spec
-  standard:
-    name: standardrb
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-      - uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: 3.2
-          bundler-cache: true
-      - name: standardrb
-        run: bundle exec rake standard
+      - name: Setup bundler
+        if: matrix.bundler != ''
+        run: |
+          gem uninstall bundler --all
+          gem install bundler --no-document --version ${{ matrix.bundler }}
+      - name: Set Appraisal bundle
+        if: matrix.appraisal != ''
+        run: |
+          echo "using gemfile gemfiles/${{ matrix.appraisal }}.gemfile"
+          bundle config set gemfile "gemfiles/${{ matrix.appraisal }}.gemfile"
+      - name: Install bundle
+        run: |
+          bundle update
+      - name: Run specs
+        run:  bundle exec rake spec
+      - name: Run standardrb
+        if:   matrix.standardrb == true
+        run:  bundle exec standardrb

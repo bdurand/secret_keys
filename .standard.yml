@@ -6,3 +6,5 @@ ignore:
   - "**/*":
       # Explicitly keep b/c these serve as documentation
       - Style/IfWithBooleanLiteralBranches
+  - 'spec/**/*':
+    - Lint/UselessAssignment
