@@ -2,7 +2,6 @@
 
 require "securerandom"
 require "openssl"
-require "base64"
 
 # Encyption helper for encrypting and decrypting values using AES-256-GCM and returning
 # as Base64 encoded strings. The encrypted values also include a prefix that can be used
@@ -138,13 +137,13 @@ class SecretKeys::Encryptor
   # Receive a cipher object (initialized with key) and data
   def encode_aes(params)
     encoded = params.values.pack(ENCODING_FORMAT)
-    # encode base64 and get rid of trailing newline and unnecessary =
-    Base64.encode64(encoded).chomp.tr("=", "")
+    # encode base64 and get rid of unnecessary '=' padding
+    [encoded].pack("m0").tr("=", "")
   end
 
   # Passed in an aes encoded string and returns a cipher object
   def decode_aes(str)
-    unpacked_data = Base64.decode64(str).unpack(ENCODING_FORMAT)
+    unpacked_data = str.unpack1("m").unpack(ENCODING_FORMAT)
     # Splat the data array apart
     # nonce, auth_tag, encrypted_data = unpacked_data
     CipherParams.new(*unpacked_data)
