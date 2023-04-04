@@ -40,6 +40,17 @@ describe SecretKeys::Encryptor do
     end
   end
 
+  describe "decrypt" do
+    it "should decrypt a value that was base 64 encoded with line breaks and padding" do
+      long_line = "*" * 100
+      encrypted = encryptor.encrypt(long_line)
+      with_line_breaks = encrypted.scan(/.{1,60}/).join("\n")
+      padding_length = (4 - (with_line_breaks.length % 4)) % 4
+      with_line_breaks += "=" * padding_length
+      expect(encryptor.decrypt(with_line_breaks)).to eq long_line
+    end
+  end
+
   describe ".from_password" do
     it "should raise an error if password is empty" do
       expect { SecretKeys::Encryptor.from_password(nil, salt) }.to raise_error(ArgumentError)
