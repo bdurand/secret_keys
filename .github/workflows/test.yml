@@ -16,40 +16,28 @@ jobs:
       matrix:
         os: [ubuntu-latest]
         ruby: [2.4, 2.5, 2.6, 2.7, 3.0, 3.1, 3.2]
-        job: [rspec]
         include:
           - os: ubuntu-latest
             ruby: 2.7
             job: standardrb
     steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: set up Ruby
-        uses: ruby/setup-ruby@v1
+      - uses: actions/checkout@v3
+      - uses: ruby/setup-ruby@v1
         with:
           ruby-version: ${{ matrix.ruby }}
-      # Caching makes life better
-      - name: build lockfile
-        run: |
-          gem install -v '~> 2.0' bundler # needed for rubinius for some reason...
-          bundle config path vendor/bundle
-          bundle lock
-      - uses: actions/cache@v1
-        with:
-          path: vendor/bundle
-          key: bundle-use-ruby-${{ matrix.os }}-${{ matrix.ruby }}-${{ hashFiles('**/Gemfile.lock') }}
-          restore-keys: |
-            bundle-use-ruby-${{ matrix.os }}-${{ matrix.ruby }}-
-            bundle-use-ruby-${{ matrix.os }}-
-      - name: install dependencies
-        run: |
-          bundle install --jobs 3 --retry 3
-          bundle clean
+          bundler-cache: true
       # Okay, back to what we really care about...
       # This is sort of a hack, but it's fine.
       - name: specs
-        if: matrix.job == 'rspec'
         run: bundle exec rake spec
+  standard:
+    name: standardrb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 3.2
+          bundler-cache: true
       - name: standardrb
-        if: matrix.job == 'standardrb'
         run: bundle exec rake standard
