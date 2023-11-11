@@ -3,7 +3,7 @@
 require "optparse"
 require "io/console"
 
-require_relative "../secret_keys.rb"
+require_relative "../secret_keys"
 
 module SecretKeys::CLI
   class Base
@@ -47,7 +47,7 @@ module SecretKeys::CLI
 
     def encrypted_file_contents
       encrypted = secrets.encrypted_hash
-      string = (format == :yaml ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+      string = ((format == :yaml) ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
       string
     end
@@ -166,8 +166,8 @@ module SecretKeys::CLI
       @secrets = SecretKeys.new({}, secret_key)
       if input.is_a?(String)
         if File.exist?(input)
-          STDERR.puts "Error: Cannot init preexisting file '#{input}'"
-          STDERR.puts "You may want to try calling `secret_keys encrypt/edit` instead"
+          warn "Error: Cannot init preexisting file '#{input}'"
+          warn "You may want to try calling `secret_keys encrypt/edit` instead"
           exit 1
         end
 
@@ -220,9 +220,7 @@ module SecretKeys::CLI
         raise ArgumentError, "Cannot perform in place editing on streams" unless @input.is_a?(String)
         # make sure we read the file **before** writing to it.
         contents = encrypted_file_contents
-        File.open(@input, "w") do |file|
-          file.write(contents)
-        end
+        File.write(@input, contents)
       else
         $stdout.write(encrypted_file_contents)
         $stdout.flush
@@ -237,7 +235,7 @@ module SecretKeys::CLI
 
     def run!
       decrypted = secrets.to_h
-      string = (format == :yaml ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
+      string = ((format == :yaml) ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
       $stdout.write(string)
       $stdout.flush
