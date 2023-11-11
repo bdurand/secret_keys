@@ -1,4 +1,4 @@
-# SecretKeys
+# Secret Keys
 
 [![specs](https://github.com/bdurand/secret_keys/workflows/Run%20tests/badge.svg)](https://github.com/bdurand/secret_keys/actions?query=branch%3Amaster)
 [![code style](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
