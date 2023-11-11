@@ -270,7 +270,7 @@ class SecretKeys < DelegateClass(Hash)
     decrypt_val_1 = decrypt_value(value_1)
     decrypt_val_2 = decrypt_value(value_2)
     if decrypt_val_1 == decrypt_val_2
-      if value_1 == decrypt_val_1 || value_2 == decrypt_val_2
+      if value_1 == decrypt_val_1 || value_2 == decrypt_val_2 # rubocop:disable Style/IfWithBooleanLiteralBranches
         false
       else
         true

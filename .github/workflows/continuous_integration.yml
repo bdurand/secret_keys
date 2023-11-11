@@ -1,8 +1,9 @@
-name: Run tests
+name: Continuous Integration
 on:
   push:
     branches:
       - master
+      - actions-*
     tags:
       - v*
   pull_request:
@@ -28,9 +29,11 @@ jobs:
           - ruby: "2.6"
           - ruby: "2.5"
           - ruby: "2.4"
+    env:
+      BUNDLE_GEMFILE: ${{ matrix.gemfile }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
       - name: Set up Ruby ${{ matrix.ruby }}
         uses: ruby/setup-ruby@v1
         with:
@@ -41,10 +44,11 @@ jobs:
           gem uninstall bundler --all
           gem install bundler --no-document --version ${{ matrix.bundler }}
       - name: Set Appraisal bundle
-        if: matrix.appraisal != ''
+        if: matrix.appraisal != '' && matrix.gemfile == ''
         run: |
           echo "using gemfile gemfiles/${{ matrix.appraisal }}.gemfile"
           bundle config set gemfile "gemfiles/${{ matrix.appraisal }}.gemfile"
+          cat gemfiles/${{ matrix.appraisal }}.gemfile
       - name: Install bundle
         run: |
           bundle update
@@ -52,4 +56,4 @@ jobs:
         run:  bundle exec rake spec
       - name: Run standardrb
         if:   matrix.standardrb == true
-        run:  bundle exec standardrb
+        run:  bundle exec rake standard
