@@ -1,7 +1,8 @@
 # Secret Keys
 
-[![specs](https://github.com/bdurand/secret_keys/workflows/Run%20tests/badge.svg)](https://github.com/bdurand/secret_keys/actions?query=branch%3Amaster)
-[![code style](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
+[![Continuous Integration](https://github.com/bdurand/secret_keys/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/bdurand/secret_keys/actions/workflows/continuous_integration.yml)
+[![Regression Test](https://github.com/bdurand/secret_keys/actions/workflows/regression_test.yml/badge.svg)](https://github.com/bdurand/secret_keys/actions/workflows/regression_test.yml)
+[![Ruby Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
 [![gem version](https://badge.fury.io/rb/secret_keys.svg)](https://badge.fury.io/rb/secret_keys)
 
 This ruby gem handles encrypting values in a JSON or YAML file. It is yet another solution for storing secrets in a ruby project.
