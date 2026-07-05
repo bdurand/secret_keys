@@ -2,6 +2,8 @@
 
 require_relative "spec_helper"
 
+require "tmpdir"
+
 describe SecretKeys do
   let(:decrypted_file_path) { File.join(__dir__, "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "fixtures", "encrypted.json") }
@@ -80,6 +82,29 @@ describe SecretKeys do
       expect(secrets.include?(SecretKeys::ENCRYPTION_KEY)).to eq false
       expect(secrets.include?(SecretKeys::ENCRYPTED)).to eq false
     end
+
+    it "should raise an ArgumentError if the data does not parse to a Hash" do
+      expect { SecretKeys.new(StringIO.new("just a plain string"), "SECRET_KEY") }.to raise_error(ArgumentError, /Hash/)
+    end
+
+    it "should load an empty hash if the data parses to nothing" do
+      secrets = SecretKeys.new(StringIO.new("# only a comment\n"), "SECRET_KEY")
+      expect(secrets.to_h).to eq({})
+    end
+
+    it "should raise an ArgumentError if the encrypted values are not a Hash" do
+      expect { SecretKeys.new({SecretKeys::ENCRYPTED => "invalid"}, "SECRET_KEY") }.to raise_error(ArgumentError, /Hash/)
+    end
+
+    it "should support the file version being a numeric string" do
+      secrets = SecretKeys.new({SecretKeys::ENCRYPTED => {".version" => "1", "foo" => "bar"}}, "SECRET_KEY")
+      expect(secrets["foo"]).to eq "bar"
+    end
+
+    it "should raise a VersionError if the file version is not a supported number" do
+      expect { SecretKeys.new({SecretKeys::ENCRYPTED => {".version" => "99"}}, "SECRET_KEY") }.to raise_error(SecretKeys::VersionError)
+      expect { SecretKeys.new({SecretKeys::ENCRYPTED => {".version" => "invalid"}}, "SECRET_KEY") }.to raise_error(SecretKeys::VersionError)
+    end
   end
 
   describe "#encrypted_hash" do
@@ -130,6 +155,21 @@ describe SecretKeys do
       expect(json[SecretKeys::ENCRYPTED]).to include("not_encrypted")
       expect(json[SecretKeys::ENCRYPTED]["not_encrypted"]).to_not eq secrets["not_encrypted"]
     end
+
+    it "should not add duplicate entries to the encrypted key list" do
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
+      secrets.encrypt!("not_encrypted")
+      secrets.encrypt!("not_encrypted")
+      expect(secrets.instance_variable_get(:@secret_keys).to_a.count("not_encrypted")).to eq 1
+    end
+  end
+
+  describe "#encryption_key=" do
+    it "should raise an error if the new encryption key is nil or empty" do
+      secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
+      expect { secrets.encryption_key = nil }.to raise_error(SecretKeys::EncryptionKeyError)
+      expect { secrets.encryption_key = "" }.to raise_error(SecretKeys::EncryptionKeyError)
+    end
   end
 
   describe "#decrypt!" do
@@ -154,10 +194,10 @@ describe SecretKeys do
         secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
         secrets["foo"] = "new value"
         secrets.save(tempfile.path)
-        tempfile.rewind
 
         original_json = JSON.parse(original_file_contents)[SecretKeys::ENCRYPTED]
-        new_json = JSON.parse(tempfile.read)[SecretKeys::ENCRYPTED]
+        # Read by path since save atomically replaces the file.
+        new_json = JSON.parse(File.read(tempfile.path))[SecretKeys::ENCRYPTED]
 
         original_json.each do |key, value|
           if key == "foo" || key == "plaintext"
@@ -181,10 +221,10 @@ describe SecretKeys do
         secrets = SecretKeys.new(encrypted_file_path, "SECRET_KEY")
         secrets["foo"] = "new value"
         secrets.save(tempfile.path)
-        tempfile.rewind
 
         original_yaml = YAML.safe_load(original_file_contents)[SecretKeys::ENCRYPTED]
-        new_yaml = YAML.safe_load(tempfile.read)[SecretKeys::ENCRYPTED]
+        # Read by path since save atomically replaces the file.
+        new_yaml = YAML.safe_load(File.read(tempfile.path))[SecretKeys::ENCRYPTED]
 
         original_yaml.each do |key, value|
           if key == "foo" || key == "plaintext"
@@ -195,6 +235,33 @@ describe SecretKeys do
         end
       ensure
         tempfile.close
+      end
+    end
+
+    it "should save to a Pathname and detect the format from the extension" do
+      Dir.mktmpdir do |dir|
+        path = Pathname.new(File.join(dir, "secrets.yml"))
+        secrets = SecretKeys.new(nil, "SECRET_KEY")
+        secrets["foo"] = "bar"
+        secrets.encrypt!("foo")
+        secrets.save(path)
+        reloaded = SecretKeys.new(path.to_s, "SECRET_KEY")
+        expect(reloaded.input_format).to eq :yaml
+        expect(reloaded["foo"]).to eq "bar"
+      end
+    end
+
+    it "should preserve the file mode and leave no temporary files when overwriting an existing file" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "secrets.json")
+        File.write(path, "{}")
+        File.chmod(0o600, path)
+        secrets = SecretKeys.new(nil, "SECRET_KEY")
+        secrets["foo"] = "bar"
+        secrets.save(path)
+        expect(File.stat(path).mode & 0o7777).to eq 0o600
+        expect(Dir.entries(dir) - [".", ".."]).to eq ["secrets.json"]
+        expect(SecretKeys.new(path, "SECRET_KEY")["foo"]).to eq "bar"
       end
     end
   end

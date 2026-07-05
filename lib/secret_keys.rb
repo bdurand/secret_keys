@@ -15,6 +15,30 @@ class SecretKeys < DelegateClass(Hash)
   # Error if the crypto version specified in the file is unsupported
   class VersionError < StandardError; end
 
+  # Write a file atomically by writing to a temporary file in the same directory and
+  # renaming it over the target path so that readers never see a partially written file.
+  # The mode of an existing file at the path will be preserved.
+  #
+  # @api private
+  # @param [String, Pathname] path path of the file to write
+  # @param [String] content contents of the file
+  # @return [void]
+  def self.atomic_write(path, content)
+    path = File.expand_path(path.to_s)
+    mode = (File.stat(path).mode & 0o7777 if File.exist?(path))
+    tmp_path = File.join(File.dirname(path), ".#{File.basename(path)}.tmp.#{Process.pid}.#{rand(1_000_000)}")
+    begin
+      File.open(tmp_path, "w") do |file|
+        file.write(content)
+      end
+      File.chmod(mode, tmp_path) if mode
+      File.rename(tmp_path, path)
+    ensure
+      File.unlink(tmp_path) if File.exist?(tmp_path)
+    end
+    nil
+  end
+
   # Parse a JSON or YAML stream or file with encrypted values. Any values in the ".encrypted" key
   # in the document will be decrypted with the provided encryption key. If values
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
@@ -96,7 +120,7 @@ class SecretKeys < DelegateClass(Hash)
 
     output = ((format == "yaml") ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
     output << $/ unless output.end_with?($/) # ensure file ends with system dependent new line
-    File.write(path, output)
+    self.class.atomic_write(path, output)
     nil
   end
 
@@ -134,6 +158,7 @@ class SecretKeys < DelegateClass(Hash)
   # @param [String] new_encryption_key encryption key to use for future {#save} calls
   # @return [void]
   def encryption_key=(new_encryption_key)
+    raise EncryptionKeyError.new("Encryption key not specified") if new_encryption_key.nil? || new_encryption_key.empty?
     @original_encrypted = {}
     update_secret(key: new_encryption_key)
   end
@@ -177,10 +202,21 @@ class SecretKeys < DelegateClass(Hash)
 
     encrypted_values = hash.delete(ENCRYPTED)
     if encrypted_values
+      raise ArgumentError, "The #{ENCRYPTED} key must contain a Hash of encrypted values" unless encrypted_values.is_a?(Hash)
+
       @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
 
       version = encrypted_values.delete(VERSION_KEY) || CRYPTO_VERSION
-      raise VersionError, "Unsupported file version #{version}. Max supported is #{CRYPTO_VERSION}." if version > CRYPTO_VERSION
+      if version.is_a?(String)
+        version = begin
+          Integer(version, 10)
+        rescue ArgumentError
+          version
+        end
+      end
+      unless version.is_a?(Numeric) && version <= CRYPTO_VERSION
+        raise VersionError, "Unsupported file version #{version}. Max supported is #{CRYPTO_VERSION}."
+      end
 
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
       salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
@@ -190,7 +226,7 @@ class SecretKeys < DelegateClass(Hash)
       if file_key && !encryption_key_matches?(file_key)
         raise EncryptionKeyError.new("Incorrect encryption key")
       end
-      @secret_keys = encrypted_values.keys
+      @secret_keys = Set.new(encrypted_values.keys)
       hash.merge!(decrypt_values(encrypted_values))
     elsif @salt.nil?
       # if no salt exists, create one.
@@ -206,10 +242,15 @@ class SecretKeys < DelegateClass(Hash)
   def parse_data(data)
     @format = :json
     return {} if data.nil? || data.empty?
-    JSON.parse(data)
-  rescue JSON::JSONError
-    @format = :yaml
-    YAML.safe_load(data)
+    hash = begin
+      JSON.parse(data)
+    rescue JSON::JSONError
+      @format = :yaml
+      YAML.safe_load(data)
+    end
+    return {} if hash.nil?
+    raise ArgumentError, "Data must parse to a Hash of key value pairs" unless hash.is_a?(Hash)
+    hash
   end
 
   # Recursively encrypt all values.
@@ -263,23 +304,6 @@ class SecretKeys < DelegateClass(Hash)
     @encryptor.decrypt(encrypted_value)
   end
 
-  # Helper method to test if two values are both encrypted, but result in the same decrypted value.
-  def equal_encrypted_values?(value_1, value_2)
-    return true if value_1 == value_2
-
-    decrypt_val_1 = decrypt_value(value_1)
-    decrypt_val_2 = decrypt_value(value_2)
-    if decrypt_val_1 == decrypt_val_2
-      if value_1 == decrypt_val_1 || value_2 == decrypt_val_2 # rubocop:disable Style/IfWithBooleanLiteralBranches
-        false
-      else
-        true
-      end
-    else
-      false
-    end
-  end
-
   # This is an encrypted known value that can be used determine if the secret has changed.
   def encrypted_known_value
     encrypt_value(KNOWN_VALUE)
@@ -294,13 +318,12 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   def yaml_file?(path)
-    ext = path.split(".").last.to_s.downcase
-    ext == "yaml" || ext == "yml"
+    ext = File.extname(path.to_s).downcase
+    ext == ".yaml" || ext == ".yml"
   end
 
   def json_file?(path)
-    ext = path.split(".").last.to_s.downcase
-    ext == "json"
+    File.extname(path.to_s).downcase == ".json"
   end
 
   # Update the secret key by updating the salt

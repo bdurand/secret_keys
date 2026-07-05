@@ -78,6 +78,7 @@ module SecretKeys::CLI
         HELP
         opts.on("--secret-key-file=PATH", String, *secret_file_docs) do |value|
           raise ArgumentError, "You have already passed in the secret key" unless @secret_key.nil?
+          raise ArgumentError, "Secret key file '#{value}' does not exist" unless File.exist?(value)
           @secret_key = File.read(value).chomp
         end
 
@@ -165,13 +166,18 @@ module SecretKeys::CLI
     def run!
       @secrets = SecretKeys.new({}, secret_key)
       if input.is_a?(String)
-        if File.exist?(input)
+        contents = encrypted_file_contents
+        begin
+          # Open with exclusive create so a file created by another process
+          # between now and the write can never be clobbered.
+          File.open(input, File::WRONLY | File::CREAT | File::EXCL) do |file|
+            file.write(contents)
+          end
+        rescue Errno::EEXIST
           warn "Error: Cannot init preexisting file '#{input}'"
           warn "You may want to try calling `secret_keys encrypt/edit` instead"
           exit 1
         end
-
-        File.write(input, encrypted_file_contents)
       else
         $stdout.write(encrypted_file_contents)
       end
@@ -220,7 +226,7 @@ module SecretKeys::CLI
         raise ArgumentError, "Cannot perform in place editing on streams" unless @input.is_a?(String)
         # make sure we read the file **before** writing to it.
         contents = encrypted_file_contents
-        File.write(@input, contents)
+        SecretKeys.atomic_write(@input, contents)
       else
         $stdout.write(encrypted_file_contents)
         $stdout.flush

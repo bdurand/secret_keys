@@ -3,6 +3,8 @@
 require_relative "../spec_helper"
 require_relative "../../lib/secret_keys/cli"
 
+require "tmpdir"
+
 describe SecretKeys::CLI do
   let(:decrypted_file_path) { File.join(__dir__, "..", "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "..", "fixtures", "encrypted.json") }
@@ -41,6 +43,10 @@ describe SecretKeys::CLI do
       it "should read the secret key from the --secret-key-file option" do
         command = SecretKeys::CLI::Base.new(["--secret-key-file", secret_key_path])
         expect(command.secret_key).to eq "SECRET_KEY"
+      end
+
+      it "should raise an ArgumentError if the secret key file does not exist" do
+        expect { SecretKeys::CLI::Base.new(["--secret-key-file", "/no/such/file"]) }.to raise_error(ArgumentError, /does not exist/)
       end
 
       it "should not allow using stdin for file and secret key" do
@@ -88,6 +94,34 @@ describe SecretKeys::CLI do
     end
   end
 
+  describe SecretKeys::CLI::Init do
+    it "should initialize a new file" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "secrets.json")
+        command = SecretKeys::CLI::Init.new(["--secret-key=SECRET_KEY", path])
+        command.run!
+        secrets = SecretKeys.new(path, "SECRET_KEY")
+        expect(secrets.to_h).to eq({})
+      end
+    end
+
+    it "should refuse to overwrite an existing file" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "secrets.json")
+        File.write(path, "original contents")
+        command = SecretKeys::CLI::Init.new(["--secret-key=SECRET_KEY", path])
+        original_stderr = $stderr
+        $stderr = StringIO.new
+        begin
+          expect { command.run! }.to raise_error(SystemExit)
+        ensure
+          $stderr = original_stderr
+        end
+        expect(File.read(path)).to eq "original contents"
+      end
+    end
+  end
+
   describe SecretKeys::CLI::Encrypt do
     it "should encrypt the input file" do
       command = SecretKeys::CLI::Encrypt.new(["--secret-key=SECRET_KEY", encrypted_file_path])
@@ -108,7 +142,8 @@ describe SecretKeys::CLI do
         command = SecretKeys::CLI::Encrypt.new(["--secret-key=SECRET_KEY", "--in-place", temp_file.path])
         command.run!
         secrets = SecretKeys.new(temp_file.path, "SECRET_KEY")
-        raw_json = JSON.parse(temp_file.read)
+        # Read by path since the in-place write atomically replaces the file.
+        raw_json = JSON.parse(File.read(temp_file.path))
         expect(secrets["plaintext"]).to eq "not encrypted"
         expect(raw_json[SecretKeys::ENCRYPTED]).to include("plaintext")
         expect(raw_json[SecretKeys::ENCRYPTED]["plaintext"]).to_not eq secrets["plaintext"]
@@ -242,7 +277,8 @@ describe SecretKeys::CLI do
         command = SecretKeys::CLI::Edit.new(["--secret-key=SECRET_KEY", "--in-place", temp_file.path])
         command.run!
         secrets = SecretKeys.new(temp_file.path, "SECRET_KEY")
-        raw_json = JSON.parse(temp_file.read)
+        # Read by path since the in-place write atomically replaces the file.
+        raw_json = JSON.parse(File.read(temp_file.path))
         expect(secrets["plaintext"]).to eq "not encrypted"
         expect(raw_json[SecretKeys::ENCRYPTED]).to include("plaintext")
         expect(raw_json[SecretKeys::ENCRYPTED]["plaintext"]).to_not eq secrets["plaintext"]
