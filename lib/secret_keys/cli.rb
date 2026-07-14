@@ -169,8 +169,9 @@ module SecretKeys::CLI
         contents = encrypted_file_contents
         begin
           # Open with exclusive create so a file created by another process
-          # between now and the write can never be clobbered.
-          File.open(input, File::WRONLY | File::CREAT | File::EXCL) do |file|
+          # between now and the write can never be clobbered. The file is
+          # created readable and writable only by the owner.
+          File.open(input, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
             file.write(contents)
           end
         rescue Errno::EEXIST

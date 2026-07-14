@@ -251,6 +251,17 @@ RSpec.describe SecretKeys do
       end
     end
 
+    it "should create new files readable only by the owner" do
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "secrets.json")
+        secrets = SecretKeys.new(nil, "SECRET_KEY")
+        secrets["foo"] = "bar"
+        secrets.save(path)
+        expect(File.stat(path).mode & 0o7777).to eq 0o600
+        expect(SecretKeys.new(path, "SECRET_KEY")["foo"]).to eq "bar"
+      end
+    end
+
     it "should preserve the file mode and leave no temporary files when overwriting an existing file" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "secrets.json")

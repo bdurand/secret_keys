@@ -93,13 +93,14 @@ RSpec.describe SecretKeys::CLI do
   end
 
   describe SecretKeys::CLI::Init do
-    it "should initialize a new file" do
+    it "should initialize a new file readable only by the owner" do
       Dir.mktmpdir do |dir|
         path = File.join(dir, "secrets.json")
         command = SecretKeys::CLI::Init.new(["--secret-key=SECRET_KEY", path])
         command.run!
         secrets = SecretKeys.new(path, "SECRET_KEY")
         expect(secrets.to_h).to eq({})
+        expect(File.stat(path).mode & 0o7777).to eq 0o600
       end
     end
 

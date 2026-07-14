@@ -17,7 +17,8 @@ class SecretKeys < DelegateClass(Hash)
 
   # Write a file atomically by writing to a temporary file in the same directory and
   # renaming it over the target path so that readers never see a partially written file.
-  # The mode of an existing file at the path will be preserved.
+  # The mode of an existing file at the path will be preserved. New files are created
+  # readable and writable only by the owner.
   #
   # @api private
   # @param [String, Pathname] path path of the file to write
@@ -25,13 +26,17 @@ class SecretKeys < DelegateClass(Hash)
   # @return [void]
   def self.atomic_write(path, content)
     path = File.expand_path(path.to_s)
-    mode = (File.stat(path).mode & 0o7777 if File.exist?(path))
+    mode = begin
+      File.stat(path).mode & 0o7777
+    rescue Errno::ENOENT
+      0o600
+    end
     tmp_path = File.join(File.dirname(path), ".#{File.basename(path)}.tmp.#{Process.pid}.#{rand(1_000_000)}")
     begin
       File.open(tmp_path, "w") do |file| # rubocop:disable Style/FileWrite
         file.write(content)
       end
-      File.chmod(mode, tmp_path) if mode
+      File.chmod(mode, tmp_path)
       File.rename(tmp_path, path)
     ensure
       File.unlink(tmp_path) if File.exist?(tmp_path)
@@ -191,10 +196,10 @@ class SecretKeys < DelegateClass(Hash)
 
     hash = {}
     if path_or_stream.is_a?(Hash)
-      # HACK: Perform a marshal dump/load operation to get a deep copy of the hash.
-      #       Otherwise, we can end up using destructive `#delete` operations and mess
-      #       up deeply nested values for external code (esp. when loading key: .encrypted)
-      hash = Marshal.load(Marshal.dump(path_or_stream))
+      # Deep copy the hash. Otherwise, we can end up using destructive `#delete`
+      # operations and mess up deeply nested values for external code
+      # (esp. when loading key: .encrypted)
+      hash = deep_dup(path_or_stream)
     elsif path_or_stream
       data = path_or_stream.read
       hash = parse_data(data)
@@ -204,7 +209,7 @@ class SecretKeys < DelegateClass(Hash)
     if encrypted_values
       raise ArgumentError, "The #{ENCRYPTED} key must contain a Hash of encrypted values" unless encrypted_values.is_a?(Hash)
 
-      @original_encrypted = Marshal.load(Marshal.dump(encrypted_values))
+      @original_encrypted = deep_dup(encrypted_values)
 
       version = encrypted_values.delete(VERSION_KEY) || CRYPTO_VERSION
       if version.is_a?(String)
@@ -248,9 +253,27 @@ class SecretKeys < DelegateClass(Hash)
       @format = :yaml
       YAML.safe_load(data)
     end
-    return {} if hash.nil?
+    # YAML.safe_load returns false instead of nil for empty documents on Ruby < 3.4.
+    return {} if hash.nil? || hash == false
     raise ArgumentError, "Data must parse to a Hash of key value pairs" unless hash.is_a?(Hash)
     hash
+  end
+
+  # Deep copy a parsed data structure of hashes, arrays, and scalar values.
+  def deep_dup(value)
+    if value.is_a?(Hash)
+      copy = {}
+      value.each do |key, val|
+        copy[deep_dup(key)] = deep_dup(val)
+      end
+      copy
+    elsif value.is_a?(Array)
+      value.collect { |val| deep_dup(val) }
+    elsif value.is_a?(String)
+      value.dup
+    else
+      value
+    end
   end
 
   # Recursively encrypt all values.

@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Files are now written atomically (write to a temporary file and rename) so a crash or concurrent reader can never see a partially written secrets file. The mode of an existing file is preserved.
+- New secrets files are now created readable and writable only by the owner (mode 0600) instead of relying on the process umask. The mode of an existing file is still preserved.
 - `secret_keys init` now uses an exclusive file create so it can no longer overwrite a file created between the existence check and the write.
 - `SecretKeys#save` no longer raises `ArgumentError` when passed a `Pathname`.
 - An unsupported `.version` value that is a string now raises `SecretKeys::VersionError` instead of a comparison `ArgumentError`; numeric strings like `"1"` are accepted.
