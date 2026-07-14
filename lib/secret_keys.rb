@@ -21,8 +21,8 @@ class SecretKeys < DelegateClass(Hash)
   # readable and writable only by the owner.
   #
   # @api private
-  # @param [String, Pathname] path path of the file to write
-  # @param [String] content contents of the file
+  # @param path [String, Pathname] path of the file to write
+  # @param content [String] contents of the file
   # @return [void]
   def self.atomic_write(path, content)
     path = File.expand_path(path.to_s)
@@ -49,8 +49,8 @@ class SecretKeys < DelegateClass(Hash)
   # were put into the ".encrypted" key manually and are not yet encrypted, they will be used
   # as is without any decryption.
   #
-  # @param [String, #read, Hash] path_or_stream path to a JSON/YAML file to load, an IO object, or a Hash (mostly for testing purposes)
-  # @param [String] encryption_key secret to use for encryption/decryption
+  # @param path_or_stream [String, #read, Hash] path to a JSON/YAML file to load, an IO object, or a Hash (mostly for testing purposes)
+  # @param encryption_key [String] secret to use for encryption/decryption
   #
   # @note If no encryption key is passed, this will defautl to env var SECRET_KEYS_ENCRYPTION_KEY
   # or (if that is empty) the value read from the file path in SECRET_KEYS_ENCRYPTION_KEY_FILE.
@@ -77,7 +77,7 @@ class SecretKeys < DelegateClass(Hash)
 
   # Mark the key as being encrypted when the JSON is saved.
   #
-  # @param [String] key key to mark as needing encryption
+  # @param key [String] key to mark as needing encryption
   # @return [void]
   def encrypt!(key)
     @secret_keys << key
@@ -86,7 +86,7 @@ class SecretKeys < DelegateClass(Hash)
 
   # Mark the key as no longer being decrypted when the JSON is saved.
   #
-  # @param [String] key key to mark as not needing encryption
+  # @param key [String] key to mark as not needing encryption
   # @return [void]
   def decrypt!(key)
     @secret_keys.delete(key)
@@ -95,7 +95,7 @@ class SecretKeys < DelegateClass(Hash)
 
   # Return true if the key is encrypted.
   #
-  # @param [String] key key to check
+  # @param key [String] key to check
   # @return [Boolean]
   def encrypted?(key)
     @secret_keys.include?(key)
@@ -106,8 +106,8 @@ class SecretKeys < DelegateClass(Hash)
   # different initialization vector). This can be helpful if you have your secrets in source
   # control so that only changed keys will actually be changed in the file when it is updated.
   #
-  # @param [String, Pathname] path path of the file to save. If the file exists, only changed values will be updated.
-  # @param [String, Symbol] format: output format (YAML or JSON) to use. This will default based on the extension on the file path or the format originally used
+  # @param path [String, Pathname] path of the file to save. If the file exists, only changed values will be updated.
+  # @param format [String, Symbol] output format (YAML or JSON) to use. This will default based on the extension on the file path or the format originally used
   # @return [void]
   def save(path, format: nil)
     # create a copy of the encrypted hash for working on
@@ -160,7 +160,7 @@ class SecretKeys < DelegateClass(Hash)
 
   # Change the encryption key in the document. When saving later, this key will be used.
   #
-  # @param [String] new_encryption_key encryption key to use for future {#save} calls
+  # @param new_encryption_key [String] encryption key to use for future {#save} calls
   # @return [void]
   def encryption_key=(new_encryption_key)
     raise EncryptionKeyError.new("Encryption key not specified") if new_encryption_key.nil? || new_encryption_key.empty?
@@ -242,7 +242,7 @@ class SecretKeys < DelegateClass(Hash)
   end
 
   # Attempt to parse the file first using JSON and fallback to YAML
-  # @param [String] data file data to parse
+  # @param data [String] file data to parse
   # @return [Hash] data parsed to a hash
   def parse_data(data)
     @format = :json
