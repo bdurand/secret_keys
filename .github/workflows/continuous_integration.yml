@@ -2,11 +2,14 @@ name: Continuous Integration
 on:
   push:
     branches:
-      - master
+      - main
       - actions-*
     tags:
       - v*
   pull_request:
+    branches-ignore:
+      - actions-*
+  workflow_dispatch:
 
 jobs:
   specs:
