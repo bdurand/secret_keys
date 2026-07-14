@@ -28,7 +28,7 @@ class SecretKeys < DelegateClass(Hash)
     mode = (File.stat(path).mode & 0o7777 if File.exist?(path))
     tmp_path = File.join(File.dirname(path), ".#{File.basename(path)}.tmp.#{Process.pid}.#{rand(1_000_000)}")
     begin
-      File.open(tmp_path, "w") do |file|
+      File.open(tmp_path, "w") do |file| # rubocop:disable Style/FileWrite
         file.write(content)
       end
       File.chmod(mode, tmp_path) if mode
@@ -219,7 +219,7 @@ class SecretKeys < DelegateClass(Hash)
       end
 
       file_key = encrypted_values.delete(ENCRYPTION_KEY)
-      salt = (encrypted_values.delete(SALT) || Encryptor.random_salt)
+      salt = encrypted_values.delete(SALT) || Encryptor.random_salt
       update_secret(salt: salt)
 
       # Check that we are using the right key

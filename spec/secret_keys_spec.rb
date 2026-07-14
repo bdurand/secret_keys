@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require_relative "spec_helper"
+require "spec_helper"
 
 require "tmpdir"
 
-describe SecretKeys do
+RSpec.describe SecretKeys do
   let(:decrypted_file_path) { File.join(__dir__, "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "fixtures", "encrypted.json") }
   let(:future_file_path) { File.join(__dir__, "fixtures", "future_file_version.json") }

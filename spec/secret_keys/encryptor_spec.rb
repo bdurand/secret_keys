@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "../spec_helper"
+require "spec_helper"
 
-describe SecretKeys::Encryptor do
+RSpec.describe SecretKeys::Encryptor do
   let(:password) { "SECRET_KEY" }
   let(:salt) { "deadbeef" }
   let(:encryptor) { SecretKeys::Encryptor.from_password(password, salt) }

@@ -102,7 +102,7 @@ class SecretKeys::Encryptor
   def decrypt(encrypted_str)
     return encrypted_str unless self.class.encrypted?(encrypted_str)
 
-    decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
+    decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..]
     params = decode_aes(decrypt_str)
 
     cipher = OpenSSL::Cipher.new(CIPHER).decrypt

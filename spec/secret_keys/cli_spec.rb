@@ -1,25 +1,23 @@
 # frozen_string_literal: true
 
-require_relative "../spec_helper"
+require "spec_helper"
 require_relative "../../lib/secret_keys/cli"
 
 require "tmpdir"
 
-describe SecretKeys::CLI do
+RSpec.describe SecretKeys::CLI do
   let(:decrypted_file_path) { File.join(__dir__, "..", "fixtures", "decrypted.json") }
   let(:encrypted_file_path) { File.join(__dir__, "..", "fixtures", "encrypted.json") }
   let(:secret_key_path) { File.join(__dir__, "..", "fixtures", "secret_key") }
   let(:stdout) { StringIO.new }
 
   around :each do |example|
-    begin
-      $stdin = StringIO.new("{}")
-      $stdout = stdout
-      example.call
-    ensure
-      $stdin = STDIN
-      $stdout = STDOUT
-    end
+    $stdin = StringIO.new("{}")
+    $stdout = stdout
+    example.call
+  ensure
+    $stdin = STDIN
+    $stdout = STDOUT
   end
 
   describe SecretKeys::CLI::Base do
