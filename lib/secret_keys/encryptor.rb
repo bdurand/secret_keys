@@ -21,8 +21,8 @@ class SecretKeys::Encryptor
   class << self
     # Create an Encryptor from a password and salt. This is a shortcut for generating an Encryptor
     # with a 32 byte encryption key. The key will be derived from the password and salt.
-    # @param [String] password secret used to encrypt the data
-    # @param [String] salt random hex-encoded byte array for key derivation
+    # @param password [String] secret used to encrypt the data
+    # @param salt [String] random hex-encoded byte array for key derivation
     # @return [SecretKeys::Encryptor] a new encryptor with key derived from password and salt
     def from_password(password, salt)
       raise ArgumentError, "Password must be present" if password.nil? || password.empty?
@@ -55,7 +55,7 @@ class SecretKeys::Encryptor
     end
   end
 
-  # @param [String] raw_key the key directly passed into the encrypt/decrypt functions. This must be exactly {KEY_LENGTH} bytes long.
+  # @param raw_key [String] the key directly passed into the encrypt/decrypt functions. This must be exactly {KEY_LENGTH} bytes long.
   def initialize(raw_key)
     raise ArgumentError, "key must be #{KEY_LENGTH} bytes long" unless raw_key.bytesize == KEY_LENGTH
     @derived_key = raw_key
@@ -65,7 +65,7 @@ class SecretKeys::Encryptor
   # calling this function multiple times will result in different values. Only strings
   # can be encrypted. Any other object type will be return the value passed in.
   #
-  # @param [String] str string to encrypt (assumes UTF-8)
+  # @param str [String] string to encrypt (assumes UTF-8)
   # @return [String] Base64 encoded encrypted string with all aes parameters
   def encrypt(str)
     return str unless str.is_a?(String)
@@ -96,13 +96,13 @@ class SecretKeys::Encryptor
   # Decrypt a string with the encryption key. If the value is not a string or it was
   # not encrypted with the encryption key, the value itself will be returned.
   #
-  # @param [String] encrypted_str Base64 encoded encrypted string with aes params (from {#encrypt})
+  # @param encrypted_str [String] Base64 encoded encrypted string with aes params (from {#encrypt})
   # @return [String] decrypted string value
   # @raise [OpenSSL::Cipher::CipherError] there is something wrong with the encoded data (usually incorrect key)
   def decrypt(encrypted_str)
     return encrypted_str unless self.class.encrypted?(encrypted_str)
 
-    decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..-1]
+    decrypt_str = encrypted_str[ENCRYPTED_PREFIX.length..]
     params = decode_aes(decrypt_str)
 
     cipher = OpenSSL::Cipher.new(CIPHER).decrypt

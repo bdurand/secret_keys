@@ -7,9 +7,12 @@ Gem::Specification.new do |spec|
   spec.summary = "Simple mechanism for loading JSON file with encrypted values."
   spec.homepage = "https://github.com/bdurand/secret_keys"
   spec.license = "MIT"
-  spec.metadata["homepage_uri"] = spec.homepage
-  spec.metadata["source_code_uri"] = "https://github.com/bdurand/secret_keys/tree/v#{spec.version}"
-  spec.metadata["documentation_uri"] = "https://www.rubydoc.info/gems/secret_keys"
+
+  spec.metadata = {
+    "homepage_uri" => spec.homepage,
+    "source_code_uri" => spec.homepage,
+    "changelog_uri" => "#{spec.homepage}/blob/main/CHANGELOG.md"
+  }
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
@@ -17,6 +20,7 @@ Gem::Specification.new do |spec|
     .
     Appraisals
     Gemfile
+    Gemfile.lock
     Rakefile
     gemfiles/
     spec/
@@ -29,7 +33,7 @@ Gem::Specification.new do |spec|
   spec.bindir = "bin"
   spec.executables = spec.files.grep(%r{^bin/}) { |f| File.basename(f) }
 
-  spec.required_ruby_version = ">= 2.4"
+  spec.required_ruby_version = ">= 2.6"
 
-  spec.add_development_dependency "bundler", "~>2.0"
+  spec.add_development_dependency "bundler"
 end
