@@ -4,6 +4,8 @@ require "spec_helper"
 require_relative "../../lib/secret_keys/cli"
 
 require "tmpdir"
+require "shellwords"
+require "rbconfig"
 
 RSpec.describe SecretKeys::CLI do
   let(:decrypted_file_path) { File.join(__dir__, "..", "fixtures", "decrypted.json") }
@@ -292,6 +294,148 @@ RSpec.describe SecretKeys::CLI do
       stdout.rewind
       secrets = SecretKeys.new(stdout, "NEW_SECRET")
       expect(secrets["foo"]).to eq "bar"
+    end
+  end
+
+  describe SecretKeys::CLI::Open do
+    let(:fake_editor) { File.expand_path("../fixtures/fake_editor.rb", __dir__) }
+
+    # Build an $EDITOR command line that runs the fake editor in the given mode. The fake editor
+    # records the temporary file it was handed in record_path.
+    def editor_command(mode, record_path)
+      [RbConfig.ruby, fake_editor, mode, record_path].shelljoin
+    end
+
+    def editor_record(record_path)
+      JSON.parse(File.read(record_path))
+    end
+
+    # Copy the encrypted fixture into a temp dir and yield its path along with a record path.
+    def with_secrets_file(extension: ".json")
+      Dir.mktmpdir do |dir|
+        path = File.join(dir, "secrets#{extension}")
+        contents = File.read(encrypted_file_path)
+        contents = YAML.dump(JSON.parse(contents)) if extension != ".json"
+        File.write(path, contents)
+        yield path, File.join(dir, "record.json")
+      end
+    end
+
+    it "should save the edits made in the editor while keeping the ciphertext of unchanged values" do
+      with_secrets_file do |path, record_path|
+        original_json = JSON.parse(File.read(path))
+        with_environment(VISUAL: nil, EDITOR: editor_command("edit", record_path)) do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+
+        secrets = SecretKeys.new(path, "SECRET_KEY")
+        expect(secrets["foo"]).to eq "edited"
+        expect(secrets["new_secret"]).to eq "shh"
+        expect(secrets.encrypted?("new_secret")).to eq true
+        expect(secrets["plaintext"]).to eq "not encrypted"
+        expect(secrets.encrypted?("plaintext")).to eq false
+        expect(secrets["not_encrypted"]).to eq "plain text value"
+        expect(secrets.encrypted?("not_encrypted")).to eq true
+        expect(secrets["array"]).to eq ["a", "b", "c"]
+
+        new_json = JSON.parse(File.read(path))
+        expect(new_json[SecretKeys::ENCRYPTED]["array"]).to eq original_json[SecretKeys::ENCRYPTED]["array"]
+        expect(new_json[SecretKeys::ENCRYPTED]["complex"]).to eq original_json[SecretKeys::ENCRYPTED]["complex"]
+        expect(new_json[SecretKeys::ENCRYPTED]["foo"]).to_not eq original_json[SecretKeys::ENCRYPTED]["foo"]
+        expect(stdout.string).to eq ""
+      end
+    end
+
+    it "should give the editor a private temporary file and remove it afterwards" do
+      with_secrets_file do |path, record_path|
+        with_environment(VISUAL: nil, EDITOR: editor_command("noop", record_path)) do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+        record = editor_record(record_path)
+        expect(record["path"]).to end_with("/secrets.json")
+        expect(record["path"]).to_not eq path
+        expect(record["file_mode"]).to eq "600"
+        expect(record["dir_mode"]).to eq "700"
+        expect(File.exist?(record["path"])).to eq false
+        expect(File.exist?(File.dirname(record["path"]))).to eq false
+      end
+    end
+
+    it "should write the decrypted values to the temporary file" do
+      with_secrets_file do |path, record_path|
+        # The fake editor fails after recording, so the temp file is never saved back.
+        capture_path = File.join(File.dirname(path), "capture.json")
+        editor = [RbConfig.ruby, "-e", "File.write(ARGV[0], File.read(ARGV[1]))", capture_path].shelljoin
+        with_environment(VISUAL: nil, EDITOR: editor) do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+        decrypted = JSON.parse(File.read(capture_path))
+        expect(decrypted["not_encrypted"]).to eq "plain text value"
+        expect(decrypted[SecretKeys::ENCRYPTED]["foo"]).to eq "bar"
+        expect(decrypted[SecretKeys::ENCRYPTED]["complex"]["more"]).to eq [{"three" => "value_3"}]
+        expect(decrypted[SecretKeys::ENCRYPTED].keys).to_not include(".salt", ".key", ".version")
+      end
+    end
+
+    it "should leave the file untouched if nothing was changed in the editor" do
+      with_secrets_file do |path, record_path|
+        original_contents = File.read(path)
+        with_environment(VISUAL: nil, EDITOR: editor_command("noop", record_path)) do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+        expect(File.read(path)).to eq original_contents
+      end
+    end
+
+    it "should fail without saving if the editor exits with an error" do
+      with_secrets_file do |path, record_path|
+        original_contents = File.read(path)
+        with_environment(VISUAL: nil, EDITOR: editor_command("fail", record_path)) do
+          command = SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path])
+          expect { command.run! }.to raise_error(ArgumentError, /exited with status 3/)
+        end
+        expect(File.read(path)).to eq original_contents
+        expect(File.exist?(editor_record(record_path)["path"])).to eq false
+      end
+    end
+
+    it "should fail without saving if the edited file cannot be parsed" do
+      with_secrets_file do |path, record_path|
+        original_contents = File.read(path)
+        with_environment(VISUAL: nil, EDITOR: editor_command("invalid", record_path)) do
+          command = SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path])
+          expect { command.run! }.to raise_error(ArgumentError, /could not be loaded/)
+        end
+        expect(File.read(path)).to eq original_contents
+      end
+    end
+
+    it "should prefer $VISUAL over $EDITOR" do
+      with_secrets_file do |path, record_path|
+        with_environment(VISUAL: editor_command("noop", record_path), EDITOR: "/no/such/editor") do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+        expect(File.exist?(record_path)).to eq true
+      end
+    end
+
+    it "should edit YAML files as YAML" do
+      with_secrets_file(extension: ".yml") do |path, record_path|
+        with_environment(VISUAL: nil, EDITOR: editor_command("edit", record_path)) do
+          SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", path]).run!
+        end
+        expect(editor_record(record_path)["path"]).to end_with("/secrets.yml")
+        expect { JSON.parse(File.read(path)) }.to raise_error(JSON::ParserError)
+        secrets = SecretKeys.new(path, "SECRET_KEY")
+        expect(secrets.input_format).to eq :yaml
+        expect(secrets["foo"]).to eq "edited"
+        expect(secrets.encrypted?("new_secret")).to eq true
+      end
+    end
+
+    it "should not open a stream in an editor" do
+      command = SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", "-"])
+      expect { command.run! }.to raise_error(ArgumentError, /file path/)
     end
   end
 end

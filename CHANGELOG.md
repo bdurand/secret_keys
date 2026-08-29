@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.0 (Unreleased)
+
+### Added
+
+- `secret_keys open` command that decrypts a file into a private temporary file, opens it in `$VISUAL` or `$EDITOR`, and re-encrypts it in place when the editor exits. Values that were not changed keep their existing encrypted value.
+
 ## 1.0.3
 
 ### Fixed

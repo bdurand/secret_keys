@@ -88,6 +88,7 @@ Commands:
     decrypt   Decrypt a file
     read      Read the value of one key in a file
     edit      Change which values are encrypted, the file's encryption key, delete/add keys, etc.
+    open      Open the decrypted file in your editor ($VISUAL or $EDITOR) and re-encrypt it on exit
     init      Initialize an empty secrets file
 
     help      Get help for a command
@@ -161,6 +162,16 @@ You can change the encryption key used in the file.
 ```bash
 secret_keys encrypt -s mysecret --new-secret-key newsecret /path/to/file.json
 ```
+
+### Editing in your editor
+
+You can also edit the decrypted file in your editor. The decrypted contents are written to a temporary file that only you can read inside a private temporary directory, and your `$VISUAL` or `$EDITOR` command (defaulting to `vi`) is run on it. When the editor exits, the file is re-encrypted and saved in place, and the temporary directory is removed. Keys under `".encrypted"` are encrypted and everything else stays plain text, so you can move keys between the two sections or add and remove keys. Values you did not change keep their existing encrypted value, so diffs in source control stay small.
+
+```bash
+EDITOR=vim secret_keys open -s mysecret /path/to/file.json
+```
+
+If the editor exits with an error, or the edited file is no longer valid JSON or YAML, nothing is saved. Note that some editors keep swap, backup, or undo files outside the directory of the file being edited; configure your editor not to do this for sensitive files.
 
 Finally, you can print the unencrypted file to STDOUT.
 
