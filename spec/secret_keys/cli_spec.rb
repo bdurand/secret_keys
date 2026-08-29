@@ -301,6 +301,9 @@ RSpec.describe SecretKeys::CLI do
   describe SecretKeys::CLI::Open do
     let(:fake_editor) { File.expand_path("../fixtures/fake_editor.rb", __dir__) }
 
+    # The editor is a child process; keep the spec run's bundler environment out of it.
+    around(:each) { |example| without_bundler_env { example.run } }
+
     # Build an $EDITOR command line that runs the fake editor in the given mode. The fake editor
     # records the temporary file it was handed in record_path.
     def editor_command(mode, record_path)
@@ -441,6 +444,9 @@ RSpec.describe SecretKeys::CLI do
   end
 
   describe SecretKeys::CLI::Exec do
+    # The command is a child process; keep the spec run's bundler environment out of it.
+    around(:each) { |example| without_bundler_env { example.run } }
+
     def exec_command(*args)
       SecretKeys::CLI::Exec.new(["--secret-key=SECRET_KEY", *args])
     end
