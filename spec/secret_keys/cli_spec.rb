@@ -6,6 +6,7 @@ require_relative "../../lib/secret_keys/cli"
 require "tmpdir"
 require "shellwords"
 require "rbconfig"
+require "open3"
 
 RSpec.describe SecretKeys::CLI do
   let(:decrypted_file_path) { File.join(__dir__, "..", "fixtures", "decrypted.json") }
@@ -436,6 +437,133 @@ RSpec.describe SecretKeys::CLI do
     it "should not open a stream in an editor" do
       command = SecretKeys::CLI::Open.new(["--secret-key=SECRET_KEY", "-"])
       expect { command.run! }.to raise_error(ArgumentError, /file path/)
+    end
+  end
+
+  describe SecretKeys::CLI::Exec do
+    def exec_command(*args)
+      SecretKeys::CLI::Exec.new(["--secret-key=SECRET_KEY", *args])
+    end
+
+    describe "#environment" do
+      it "should map string values to upcased variable names, joining nested keys with underscores" do
+        env = exec_command(encrypted_file_path, "--", "true").environment
+        expect(env).to eq({
+          "FOO" => "bar",
+          "ARRAY_0" => "a",
+          "ARRAY_1" => "b",
+          "ARRAY_2" => "c",
+          "COMPLEX_ONE" => "value_1",
+          "COMPLEX_TWO" => "value_2",
+          "COMPLEX_MORE_0_THREE" => "value_3",
+          "PLAINTEXT" => "not encrypted",
+          "NOT_ENCRYPTED" => "plain text value"
+        })
+      end
+
+      it "should not export values that are not strings" do
+        env = exec_command(encrypted_file_path, "--", "true").environment
+        expect(env).to_not include("COUNT")
+      end
+
+      it "should prepend the --prefix to generated names" do
+        env = exec_command("--prefix", "app_", encrypted_file_path, "--", "true").environment
+        expect(env["APP_FOO"]).to eq "bar"
+        expect(env["APP_COMPLEX_ONE"]).to eq "value_1"
+        expect(env).to_not include("FOO")
+      end
+
+      it "should replace characters that are not valid in variable names" do
+        Dir.mktmpdir do |dir|
+          path = File.join(dir, "secrets.json")
+          File.write(path, JSON.dump({"api-key" => "k", "1st" => "one", "a b" => {"c" => "x"}}))
+          env = exec_command(path, "--", "true").environment
+          expect(env).to eq({"API_KEY" => "k", "_1ST" => "one", "A_B_C" => "x"})
+        end
+      end
+
+      it "should use the name given with --key for that path" do
+        env = exec_command("--key", "complex.one=DB_PASSWORD", "-k", "foo=FOO_BAR", encrypted_file_path, "--", "true").environment
+        expect(env["DB_PASSWORD"]).to eq "value_1"
+        expect(env["FOO_BAR"]).to eq "bar"
+        expect(env).to_not include("COMPLEX_ONE", "FOO")
+      end
+
+      it "should not apply the prefix to names given with --key" do
+        env = exec_command("--prefix", "APP_", "--key", "foo=FOO", encrypted_file_path, "--", "true").environment
+        expect(env["FOO"]).to eq "bar"
+        expect(env["APP_COMPLEX_ONE"]).to eq "value_1"
+      end
+
+      it "should raise an error if a --key path has no string value" do
+        expect { exec_command("--key", "nothing=X", encrypted_file_path, "--", "true").environment }.to raise_error(ArgumentError, /nothing/)
+        expect { exec_command("--key", "count=X", encrypted_file_path, "--", "true").environment }.to raise_error(ArgumentError, /count/)
+        expect { exec_command("--key", "complex=X", encrypted_file_path, "--", "true").environment }.to raise_error(ArgumentError, /complex/)
+      end
+
+      it "should raise an error if a --key name is not a valid variable name" do
+        expect { exec_command("--key", "foo=BAD-NAME", encrypted_file_path, "--", "true").environment }.to raise_error(ArgumentError, /BAD-NAME/)
+      end
+
+      it "should raise an error if two keys map to the same variable name" do
+        expect { exec_command("--key", "foo=PLAINTEXT", encrypted_file_path, "--", "true").environment }.to raise_error(ArgumentError, /PLAINTEXT/)
+      end
+
+      it "should raise an error if --key is missing a name" do
+        expect { exec_command("--key", "foo", encrypted_file_path, "--", "true") }.to raise_error(ArgumentError, /PATH=NAME/)
+      end
+    end
+
+    describe "command parsing" do
+      it "should take the command after --" do
+        command = exec_command(encrypted_file_path, "--", "printenv", "-0", "FOO")
+        expect(command.input).to eq encrypted_file_path
+        expect(command.command).to eq ["printenv", "-0", "FOO"]
+      end
+
+      it "should take the command without --" do
+        command = exec_command(encrypted_file_path, "printenv", "FOO")
+        expect(command.command).to eq ["printenv", "FOO"]
+      end
+
+      it "should raise an error if no command is given" do
+        expect { exec_command(encrypted_file_path).run! }.to raise_error(ArgumentError, /No command/)
+      end
+
+      it "should raise an error if the input is a stream" do
+        expect { exec_command("-", "--", "true").run! }.to raise_error(ArgumentError, /file path/)
+      end
+    end
+
+    describe "#run!" do
+      it "should replace the process with the command and the variables in its environment" do
+        command = exec_command("--prefix", "APP_", encrypted_file_path, "--", "printenv", "APP_FOO")
+        expect(Kernel).to receive(:exec).with(hash_including("APP_FOO" => "bar", "APP_COMPLEX_ONE" => "value_1"), "printenv", "APP_FOO")
+        command.run!
+        expect(stdout.string).to eq ""
+      end
+
+      it "should exit with status 127 if the command is not found" do
+        command = exec_command(encrypted_file_path, "--", "no_such_command_xyz")
+        allow(Kernel).to receive(:exec).and_raise(Errno::ENOENT)
+        original_stderr = $stderr
+        $stderr = StringIO.new
+        begin
+          expect { command.run! }.to raise_error(SystemExit) { |error| expect(error.status).to eq 127 }
+          expect($stderr.string).to include("no_such_command_xyz")
+        ensure
+          $stderr = original_stderr
+        end
+      end
+
+      it "should run the command with the decrypted values in its environment" do
+        executable = File.expand_path("../../bin/secret_keys", __dir__)
+        child = [RbConfig.ruby, "-e", "print ENV['APP_FOO'], '|', ENV['APP_COMPLEX_MORE_0_THREE'], '|', ENV.fetch('APP_COUNT', 'unset')"]
+        out, err, status = Open3.capture3(RbConfig.ruby, executable, "exec", "--secret-key=SECRET_KEY", "--prefix", "APP_", encrypted_file_path, "--", *child, stdin_data: "")
+        expect(err).to eq ""
+        expect(status.exitstatus).to eq 0
+        expect(out).to eq "bar|value_3|unset"
+      end
     end
   end
 end
