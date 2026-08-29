@@ -2,6 +2,9 @@
 
 require "optparse"
 require "io/console"
+require "shellwords"
+require "stringio"
+require "tmpdir"
 
 require_relative "../secret_keys"
 
@@ -20,6 +23,12 @@ module SecretKeys::CLI
 
     # Subclasses can override this method to parse additional options beyond the standard set.
     def parse_additional_options(opts)
+    end
+
+    # Subclasses can override this method to consume any arguments left after the input file.
+    # By default no extra arguments are allowed.
+    def parse_additional_arguments(argv)
+      raise ArgumentError.new("Too many arguments") unless argv.empty?
     end
 
     # @return [SecretKeys] the secrets
@@ -46,8 +55,12 @@ module SecretKeys::CLI
     protected
 
     def encrypted_file_contents
-      encrypted = secrets.encrypted_hash
-      string = ((format == :yaml) ? YAML.dump(encrypted) : JSON.pretty_generate(encrypted))
+      serialize(secrets.encrypted_hash)
+    end
+
+    # Serialize a hash in the output format with a trailing newline.
+    def serialize(hash)
+      string = ((format == :yaml) ? YAML.dump(hash) : JSON.pretty_generate(hash))
       string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
       string
     end
@@ -100,7 +113,7 @@ module SecretKeys::CLI
         @input = $stdin
       end
 
-      raise ArgumentError.new("Too many arguments") unless argv.empty?
+      parse_additional_arguments(argv)
     end
 
     def get_secret_key(value)
@@ -241,10 +254,7 @@ module SecretKeys::CLI
     end
 
     def run!
-      decrypted = secrets.to_h
-      string = ((format == :yaml) ? YAML.dump(decrypted) : JSON.pretty_generate(decrypted))
-      string << $/ unless string.end_with?($/) # ensure file ends with system dependent new line
-      $stdout.write(string)
+      $stdout.write(serialize(secrets.to_h))
       $stdout.flush
     end
   end
@@ -339,6 +349,196 @@ module SecretKeys::CLI
       end
 
       super
+    end
+  end
+
+  # Open the decrypted file in an editor and re-encrypt it when the editor exits. Values that
+  # were not changed in the editor keep their existing ciphertext.
+  class Open < Base
+    DEFAULT_EDITOR = "vi"
+
+    def action_name
+      "open"
+    end
+
+    def run!
+      raise ArgumentError, "Cannot open a stream in an editor; specify a file path" unless input.is_a?(String)
+
+      original = decrypted_file_contents
+      edited = edit_in_editor(original)
+      # Leave the file untouched if nothing was changed in the editor.
+      return if edited == original
+
+      apply_edits(edited)
+      secrets.save(input, format: format)
+    end
+
+    private
+
+    # The decrypted document in the same shape as the encrypted file: plain text keys at the
+    # top level and secret keys under ".encrypted", without the internal salt/key/version entries.
+    def decrypted_file_contents
+      plain = {}
+      encrypted = {}
+      secrets.to_h.each do |key, value|
+        if secrets.encrypted?(key)
+          encrypted[key] = value
+        else
+          plain[key] = value
+        end
+      end
+      plain[SecretKeys::ENCRYPTED] = encrypted
+      serialize(plain)
+    end
+
+    # Write the contents to a file only the current user can read inside a private temporary
+    # directory, run the editor on it, and return the edited contents. The block form of
+    # Dir.mktmpdir removes the directory and everything in it (including any swap or backup
+    # files the editor created) in an ensure block, so the plain text never outlives this call.
+    def edit_in_editor(contents)
+      Dir.mktmpdir("secret_keys") do |dir|
+        path = File.join(dir, temp_file_name)
+        File.open(path, File::WRONLY | File::CREAT | File::EXCL, 0o600) do |file|
+          file.write(contents)
+        end
+        run_editor(path)
+        File.read(path)
+      end
+    end
+
+    # Run $VISUAL or $EDITOR (which may include arguments) on the path.
+    def run_editor(path)
+      editor = [ENV["VISUAL"], ENV["EDITOR"]].find { |value| value && !value.empty? } || DEFAULT_EDITOR
+      command = Shellwords.split(editor)
+      raise ArgumentError, "No editor configured; set the VISUAL or EDITOR environment variable" if command.empty?
+
+      unless system(*command, path)
+        raise ArgumentError, "Editor #{editor.inspect} exited with status #{$?.exitstatus}; no changes were saved"
+      end
+    end
+
+    # Name the temporary file after the input file so the editor picks the right syntax highlighting.
+    def temp_file_name
+      extension = ((format == :yaml) ? ".yml" : ".json")
+      "#{File.basename(input, ".*")}#{extension}"
+    end
+
+    # Replace the values and the list of encrypted keys with the edited document. The original
+    # ciphertexts are kept for values that did not change.
+    def apply_edits(contents)
+      edited = begin
+        SecretKeys.new(StringIO.new(contents), secret_key)
+      rescue => e
+        raise ArgumentError, "Edited file could not be loaded (#{e.message}); no changes were saved"
+      end
+
+      secrets.keys.each { |key| secrets.decrypt!(key) }
+      secrets.clear
+      secrets.merge!(edited.to_h)
+      edited.each_key { |key| secrets.encrypt!(key) if edited.encrypted?(key) }
+    end
+  end
+
+  # Run a command with the decrypted values from the file injected as environment variables.
+  class Exec < Base
+    ENV_NAME_MATCHER = /\A[A-Za-z_][A-Za-z0-9_]*\z/.freeze
+
+    # @return [Array<String>] the command and arguments to run
+    attr_reader :command
+
+    def action_name
+      "exec"
+    end
+
+    def parse_additional_options(opts)
+      opts.banner = "Usage: secret_keys exec [options] FILE -- COMMAND [ARGS...]"
+      opts.separator("\nExec options:")
+
+      @prefix = ""
+      opts.on("--prefix PREFIX", String, *split(<<~HELP)) do |value|
+        Prepend PREFIX to every generated variable name (e.g. --prefix APP_). Names set with --key are not prefixed.
+      HELP
+        @prefix = value
+      end
+
+      @key_names = {}
+      opts.on("-k", "--key PATH=NAME", String, *split(<<~HELP)) do |value|
+        Export the value at PATH (dot notation) as the variable NAME instead of the generated name.
+        May be given multiple times.
+      HELP
+        path, name = value.split("=", 2)
+        raise ArgumentError, "--key requires PATH=NAME" if path.nil? || path.empty? || name.nil? || name.empty?
+        @key_names[path] = name
+      end
+    end
+
+    # Everything after the input file (optionally separated by --) is the command to run.
+    def parse_additional_arguments(argv)
+      argv.shift if argv.first == "--"
+      @command = argv.dup
+      argv.clear
+    end
+
+    def run!
+      raise ArgumentError, "exec requires a file path" unless input.is_a?(String)
+      raise ArgumentError, "No command given. Usage: secret_keys exec [options] FILE -- COMMAND [ARGS...]" if command.empty?
+
+      # Load and decrypt before exec so file errors are not mistaken for a missing command.
+      env = environment
+
+      begin
+        # Replace this process so signals and the exit status pass through untouched.
+        Kernel.exec(env, *command)
+      rescue Errno::ENOENT
+        warn "secret_keys: command not found: #{command.first}"
+        exit 127
+      rescue Errno::EACCES
+        warn "secret_keys: permission denied: #{command.first}"
+        exit 126
+      end
+    end
+
+    # Environment variables derived from the string values in the file. Names are generated by
+    # upcasing the key path joined with underscores (prefixed with --prefix if given); characters
+    # that are not valid in a variable name become underscores. Values that are not strings are
+    # skipped. Names given with --key override the generated name for that key.
+    #
+    # @return [Hash<String, String>] variable names and values
+    def environment
+      env = {}
+      sources = {}
+      each_string_value(secrets.to_h, []) do |path, value|
+        dotted = path.join(".")
+        name = @key_names[dotted] || generated_name(path)
+        raise ArgumentError, "Invalid environment variable name #{name.inspect} for key #{dotted.inspect}" unless ENV_NAME_MATCHER.match?(name)
+        raise ArgumentError, "Keys #{sources[name].inspect} and #{dotted.inspect} both map to #{name}" if sources.include?(name)
+        sources[name] = dotted
+        env[name] = value
+      end
+
+      missing = @key_names.keys - sources.values
+      raise ArgumentError, "No string value found for --key #{missing.first.inspect}" unless missing.empty?
+
+      env
+    end
+
+    private
+
+    # Yield the path (array of keys and array indexes as strings) and value of every string leaf.
+    def each_string_value(value, path, &block)
+      if value.is_a?(Hash)
+        value.each { |key, val| each_string_value(val, path + [key.to_s], &block) }
+      elsif value.is_a?(Array)
+        value.each_with_index { |val, index| each_string_value(val, path + [index.to_s], &block) }
+      elsif value.is_a?(String)
+        yield path, value
+      end
+    end
+
+    def generated_name(path)
+      name = "#{@prefix}#{path.join("_")}".upcase.gsub(/[^A-Z0-9_]/, "_")
+      name = "_#{name}" if name.match?(/\A[0-9]/)
+      name
     end
   end
 end
